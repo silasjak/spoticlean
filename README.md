@@ -76,6 +76,11 @@ wählst du eine deiner eigenen Playlisten oder „Liked Songs“ aus.
 
 ## Bedienung
 
+Die Review-Ansicht läuft im Alternate-Screen-Buffer (wie `htop`/`less`) mit
+einer festen Tastenleiste am unteren Rand — die Tasten sind immer sichtbar,
+kein Popup, kein `?` nötig. Dein normales Terminal-Scrollback bleibt
+unberührt und ist nach dem Beenden wieder da.
+
 Pro Song wird sofort versucht, an einer geschätzten Refrain-Stelle
 (~40 % der Songlänge) auf deinem aktiven Spotify-Gerät abzuspielen.
 
@@ -89,7 +94,6 @@ Pro Song wird sofort versucht, an einer geschätzten Refrain-Stelle
 | `b`               | Zurück zum geschätzten Refrain-Einstieg           |
 | `o`               | Song in Spotify öffnen (App/Web)                  |
 | `q` / `Strg+C`    | Beenden — Fortschritt wird gespeichert            |
-| `?`               | Hilfe anzeigen                                    |
 
 Entfernen passiert **sofort** über die Spotify-API (kein Sammel-Commit am
 Ende), `u` macht das zuverlässig rückgängig (Song wird wieder
