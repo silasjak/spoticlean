@@ -60,6 +60,11 @@ export async function removeTrack(source: TrackSource, track: SpotifyTrack): Pro
     return;
   }
 
+  // /me/tracks addresses tracks by id, which local files don't have — fail
+  // with a clear message instead of sending {ids:[null]} to the API.
+  if (!track.id) {
+    throw new Error('Lokale Dateien können nicht aus Liked Songs entfernt werden.');
+  }
   await spotify.delete('/me/tracks', { ids: [track.id] });
 }
 
@@ -70,5 +75,8 @@ export async function restoreTrack(source: TrackSource, track: SpotifyTrack): Pr
     return;
   }
 
+  if (!track.id) {
+    throw new Error('Lokale Dateien können nicht zu Liked Songs hinzugefügt werden.');
+  }
   await spotify.put('/me/tracks', { ids: [track.id] });
 }

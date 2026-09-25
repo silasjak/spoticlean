@@ -159,142 +159,160 @@ export async function runReviewSession(
   enterAltScreen();
   process.stdout.on('resize', onResize);
 
+  // Reviews the track currently at view.index: shows it, plays it, waits for
+  // a key, applies the decision. Returns true when the user asked to quit.
+  async function reviewOneTrack(): Promise<boolean> {
+    const item = tracks[view.index]!;
+    const track = item.track;
+
+    view.positionMs = estimateChorusPositionMs(track.duration_ms);
+    view.isPaused = false;
+    render();
+
+    if (hasDevice && !track.is_local) {
+      // Awaited (not fire-and-forget): a pause/seek pressed while this is
+      // still in flight would race it and produce spurious errors.
+      await safePlayback(() => playTrackAt(track.uri, view.positionMs, deviceId), onPlaybackError);
+      render();
+    }
+
+    let action: Decision | 'undo' | 'quit' | undefined;
+
+    while (!action) {
+      const key = await readKey();
+
+      if (key.ctrl && key.name === 'c') {
+        action = 'quit';
+        break;
+      }
+
+      const normalized =
+        key.name === 'return'
+          ? 'enter'
+          : key.name === 'backspace' || key.name === 'delete' || key.char === '\u007f'
+            ? 'backspace'
+            : key.char?.toLowerCase();
+
+      switch (normalized) {
+        case 'enter':
+        case 'k':
+          action = 'kept';
+          break;
+        case 'r':
+        case 'backspace':
+          action = 'removed';
+          break;
+        case 'q':
+          action = 'quit';
+          break;
+        case 'u':
+          action = 'undo';
+          break;
+        case 'o':
+          openInSpotify(track);
+          pushLog(`In Spotify geöffnet: ${track.name}`, pc.dim);
+          break;
+        case ' ':
+          if (hasDevice) {
+            const ok = view.isPaused
+              ? await safePlayback(() => resumePlayback(deviceId), onPlaybackError)
+              : await safePlayback(() => pausePlayback(deviceId), onPlaybackError);
+            if (ok) view.isPaused = !view.isPaused;
+            render();
+          }
+          break;
+        case '.':
+        case 'l':
+          if (hasDevice) {
+            view.positionMs += SEEK_STEP_MS;
+            await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
+            render();
+          }
+          break;
+        case ',':
+        case 'h':
+          if (hasDevice) {
+            view.positionMs = Math.max(0, view.positionMs - SEEK_STEP_MS);
+            await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
+            render();
+          }
+          break;
+        case 'b':
+          if (hasDevice) {
+            view.positionMs = estimateChorusPositionMs(track.duration_ms);
+            await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
+            render();
+          }
+          break;
+        default:
+          break;
+      }
+    }
+
+    if (action === 'quit') {
+      quitEarly = true;
+      return true;
+    }
+
+    if (action === 'undo') {
+      const last = history.pop();
+      if (!last) {
+        pushLog('Nichts zum Zurücknehmen.', pc.dim);
+        return false;
+      }
+
+      decisions.delete(last.index);
+      view.index = last.index;
+
+      if (last.action === 'removed') {
+        pushLog(`Wiederherstellen: ${last.track.name}…`, pc.dim);
+        try {
+          await restoreTrack(source, last.track);
+          replaceLastLog(`↺ Wiederhergestellt: ${last.track.name}`, pc.dim);
+        } catch (error) {
+          replaceLastLog(`Wiederherstellen fehlgeschlagen: ${(error as Error).message}`, pc.red);
+        }
+      } else {
+        pushLog(`↺ Zurückgenommen: ${last.track.name}`, pc.dim);
+      }
+      return false;
+    }
+
+    decisions.set(view.index, action);
+    history.push({ index: view.index, action, track });
+
+    if (action === 'removed') {
+      pushLog(`Entferne: ${track.name}…`, pc.dim);
+      try {
+        await removeTrack(source, track);
+        replaceLastLog(`✗ Entfernt: ${track.name}`, pc.red);
+      } catch (error) {
+        replaceLastLog(`Entfernen fehlgeschlagen (${track.name}): ${(error as Error).message}`, pc.red);
+      }
+    } else {
+      pushLog(`✓ Behalten: ${track.name}`, pc.green);
+    }
+
+    view.index += 1;
+    await saveResumeOffset(source, view.index, tracks.length);
+    return false;
+  }
+
   try {
     await withRawMode(async () => {
       while (view.index < tracks.length) {
-        const item = tracks[view.index]!;
-        const track = item.track;
-
-        view.positionMs = estimateChorusPositionMs(track.duration_ms);
-        view.isPaused = false;
-        render();
-
-        if (hasDevice && !track.is_local) {
-          // Awaited (not fire-and-forget): a pause/seek pressed while this
-          // is still in flight would race it and produce spurious errors.
-          await safePlayback(() => playTrackAt(track.uri, view.positionMs, deviceId), onPlaybackError);
-          render();
+        // Last-resort safety net: reviewOneTrack() already handles its own
+        // known failure modes (a failed removal, a playback hiccup, ...)
+        // without returning abnormally. This catches anything unforeseen so
+        // a single bad track can't take the whole session down with it.
+        try {
+          const shouldQuit = await reviewOneTrack();
+          if (shouldQuit) break;
+        } catch (error) {
+          pushLog(`Unerwarteter Fehler: ${(error as Error).message} — springe zum nächsten Song.`, pc.red);
+          view.index += 1;
+          await saveResumeOffset(source, view.index, tracks.length).catch(() => undefined);
         }
-
-        let action: Decision | 'undo' | 'quit' | undefined;
-
-        while (!action) {
-          const key = await readKey();
-
-          if (key.ctrl && key.name === 'c') {
-            action = 'quit';
-            break;
-          }
-
-          const normalized =
-            key.name === 'return'
-              ? 'enter'
-              : key.name === 'backspace' || key.name === 'delete' || key.char === '\u007f'
-                ? 'backspace'
-                : key.char?.toLowerCase();
-
-          switch (normalized) {
-            case 'enter':
-            case 'k':
-              action = 'kept';
-              break;
-            case 'r':
-            case 'backspace':
-              action = 'removed';
-              break;
-            case 'q':
-              action = 'quit';
-              break;
-            case 'u':
-              action = 'undo';
-              break;
-            case 'o':
-              openInSpotify(track);
-              pushLog(`In Spotify geöffnet: ${track.name}`, pc.dim);
-              break;
-            case ' ':
-              if (hasDevice) {
-                const ok = view.isPaused
-                  ? await safePlayback(() => resumePlayback(deviceId), onPlaybackError)
-                  : await safePlayback(() => pausePlayback(deviceId), onPlaybackError);
-                if (ok) view.isPaused = !view.isPaused;
-                render();
-              }
-              break;
-            case '.':
-            case 'l':
-              if (hasDevice) {
-                view.positionMs += SEEK_STEP_MS;
-                await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
-                render();
-              }
-              break;
-            case ',':
-            case 'h':
-              if (hasDevice) {
-                view.positionMs = Math.max(0, view.positionMs - SEEK_STEP_MS);
-                await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
-                render();
-              }
-              break;
-            case 'b':
-              if (hasDevice) {
-                view.positionMs = estimateChorusPositionMs(track.duration_ms);
-                await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
-                render();
-              }
-              break;
-            default:
-              break;
-          }
-        }
-
-        if (action === 'quit') {
-          quitEarly = true;
-          break;
-        }
-
-        if (action === 'undo') {
-          const last = history.pop();
-          if (!last) {
-            pushLog('Nichts zum Zurücknehmen.', pc.dim);
-            continue;
-          }
-
-          decisions.delete(last.index);
-          view.index = last.index;
-
-          if (last.action === 'removed') {
-            pushLog(`Wiederherstellen: ${last.track.name}…`, pc.dim);
-            try {
-              await restoreTrack(source, last.track);
-              replaceLastLog(`↺ Wiederhergestellt: ${last.track.name}`, pc.dim);
-            } catch (error) {
-              replaceLastLog(`Wiederherstellen fehlgeschlagen: ${(error as Error).message}`, pc.red);
-            }
-          } else {
-            pushLog(`↺ Zurückgenommen: ${last.track.name}`, pc.dim);
-          }
-          continue;
-        }
-
-        decisions.set(view.index, action);
-        history.push({ index: view.index, action, track });
-
-        if (action === 'removed') {
-          pushLog(`Entferne: ${track.name}…`, pc.dim);
-          try {
-            await removeTrack(source, track);
-            replaceLastLog(`✗ Entfernt: ${track.name}`, pc.red);
-          } catch (error) {
-            replaceLastLog(`Entfernen fehlgeschlagen (${track.name}): ${(error as Error).message}`, pc.red);
-          }
-        } else {
-          pushLog(`✓ Behalten: ${track.name}`, pc.green);
-        }
-
-        view.index += 1;
-        await saveResumeOffset(source, view.index, tracks.length);
       }
 
       if (hasDevice) {
