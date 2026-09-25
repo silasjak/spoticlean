@@ -155,7 +155,20 @@ Standard-Variante mit eigener App pro Person aber die unkompliziertere.)
   (Duplikate werden zusammen entfernt) — für ein Aufräum-Tool i.d.R.
   gewollt.
 - Lokale Dateien in Playlisten können nicht über Spotify Connect
-  abgespielt werden.
+  abgespielt werden, und nicht zu/aus Liked Songs hinzugefügt/entfernt
+  werden.
+
+## Spotify-API-Version
+
+Seit Spotifys ["Update on Developer Access and Platform Security"](https://developer.spotify.com/blog/2026-02-06-update-on-developer-access-and-platform-security)
+(Feb. 2026) nutzt diese App die dabei eingeführten Endpunkte:
+`GET /playlists/{id}/items` (statt `.../tracks`) und `PUT`/`DELETE
+/me/library` (statt der Track-spezifischen `/me/tracks`). Diese
+Änderungen betreffen nur **Development-Mode**-Apps (jede selbst
+erstellte App gemäß der [Einrichtung](#einmalige-einrichtung-spotify-app)
+oben) — Apps mit "Extended Quota Mode" sind davon nicht betroffen und
+könnten theoretisch noch die alten Endpunkte nutzen, brauchen das mit
+dieser Version aber nicht mehr.
 
 ## Debug-Modus
 

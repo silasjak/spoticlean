@@ -13,7 +13,7 @@ export async function selectSource(): Promise<{ source: TrackSource; total: numb
 
   spinner.stop(`${playlists.length} eigene Playlist(en) gefunden.`);
 
-  const unknownCountPlaylists = playlists.filter((playlist) => playlist.tracks?.total == null);
+  const unknownCountPlaylists = playlists.filter((playlist) => playlist.items?.total == null);
   if (unknownCountPlaylists.length > 0) {
     p.log.warn(
       `Spotify hat für ${unknownCountPlaylists.length} Playlist(en) keine Song-Anzahl geliefert: ` +
@@ -29,7 +29,7 @@ export async function selectSource(): Promise<{ source: TrackSource; total: numb
       hint: `${likedTotal} Songs`,
     },
     ...playlists.map((playlist) => {
-      const total = playlist.tracks?.total;
+      const total = playlist.items?.total;
       return {
         value: {
           source: { kind: 'playlist' as const, id: playlist.id, name: playlist.name },

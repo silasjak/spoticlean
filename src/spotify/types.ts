@@ -40,9 +40,9 @@ export type Paging<T> = {
 export type SimplifiedPlaylist = {
   id: string;
   name: string;
-  // Spotify's API occasionally omits this (e.g. for certain algorithmic or
-  // migrating playlists) — treat it as unknown rather than assuming it.
-  tracks?: { total: number } | null;
+  // Renamed from "tracks" in Spotify's February 2026 Development Mode
+  // changes; kept optional/nullable defensively in case it's ever omitted.
+  items?: { total: number } | null;
   owner: { id: string; display_name: string | null };
   collaborative: boolean;
 };
@@ -50,7 +50,8 @@ export type SimplifiedPlaylist = {
 export type Me = {
   id: string;
   display_name: string | null;
-  product: 'premium' | 'free' | 'open';
+  // `product` was removed from this response by Spotify's February 2026
+  // Development Mode changes — no longer relied on anywhere in this app.
 };
 
 export type Device = {
