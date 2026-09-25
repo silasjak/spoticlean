@@ -1,4 +1,5 @@
 import { getAccessToken, invalidateAccessToken } from '../auth/session.js';
+import { debugLog } from '../debug.js';
 
 const API_BASE = 'https://api.spotify.com/v1';
 
@@ -27,6 +28,10 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
   return url.toString();
 }
 
+function headersToObject(headers: Headers): Record<string, string> {
+  return Object.fromEntries(headers.entries());
+}
+
 /**
  * Performs one Spotify Web API request, retrying once on 401 (after
  * forcing a token refresh) and up to 3 times on 429 (honouring
@@ -34,8 +39,14 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
  */
 async function request<T>(path: string, options: RequestOptions = {}, attempt = 0): Promise<T | undefined> {
   const token = await getAccessToken();
-  const response = await fetch(buildUrl(path, options.query), {
-    method: options.method ?? 'GET',
+  const method = options.method ?? 'GET';
+  const url = buildUrl(path, options.query);
+
+  // Never log the Authorization header itself — only that one was sent.
+  debugLog(`--> ${method} ${url}${options.body ? ` body=${JSON.stringify(options.body)}` : ''} (attempt ${attempt})`);
+
+  const response = await fetch(url, {
+    method,
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: 'application/json',
@@ -48,6 +59,17 @@ async function request<T>(path: string, options: RequestOptions = {}, attempt = 
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
+
+  // Read the body exactly once, regardless of which branch below ends up
+  // using it — also means every response (retries included) shows up fully
+  // in the debug log, not just the ones that happen to reach a body read.
+  const rawText = await response.text().catch(() => '');
+
+  debugLog(
+    `<-- ${response.status} ${response.statusText} ${method} ${url}\n` +
+      `    headers: ${JSON.stringify(headersToObject(response.headers))}\n` +
+      `    body: ${rawText ? rawText.slice(0, 2000) : '(empty)'}`
+  );
 
   if (response.status === 401 && attempt < 1) {
     await invalidateAccessToken();
@@ -65,7 +87,6 @@ async function request<T>(path: string, options: RequestOptions = {}, attempt = 
   }
 
   if (!response.ok) {
-    const rawText = await response.text();
     let reason: string | undefined;
     let message = response.statusText;
     let matchedSpotifyShape = false;
@@ -105,18 +126,15 @@ async function request<T>(path: string, options: RequestOptions = {}, attempt = 
   // none of our callers use the body of those calls anyway, only attempt to
   // parse when the server actually says it sent JSON.
   const contentType = response.headers.get('content-type') ?? '';
-  if (!contentType.includes('application/json')) {
+  if (!contentType.includes('application/json') || !rawText) {
     return undefined;
   }
 
-  const text = await response.text();
-  if (!text) return undefined;
-
   try {
-    return JSON.parse(text) as T;
+    return JSON.parse(rawText) as T;
   } catch {
     throw new SpotifyApiError(
-      `Antwort von Spotify (${options.method ?? 'GET'} ${path}, Status ${response.status}) war kein gültiges JSON: ${text.slice(0, 120)}`,
+      `Antwort von Spotify (${method} ${path}, Status ${response.status}) war kein gültiges JSON: ${rawText.slice(0, 120)}`,
       response.status
     );
   }

@@ -157,6 +157,33 @@ Standard-Variante mit eigener App pro Person aber die unkompliziertere.)
 - Lokale Dateien in Playlisten können nicht über Spotify Connect
   abgespielt werden.
 
+## Debug-Modus
+
+Bei Problemen mit der Spotify-API (unerwartete Fehler, kryptische
+Antworten): `--debug` an den Befehl anhängen oder `SPOTICLEAN_DEBUG=1`
+setzen. Jeder Request und jede Response (Methode, URL, Status, Header,
+Body) landet dann in einer Log-Datei statt im Terminal — die
+Vollbild-Review-Ansicht würde Konsolenausgaben sofort wieder
+überschreiben.
+
+```bash
+npm run dev:debug
+# oder
+SPOTICLEAN_DEBUG=1 npm run dev
+```
+
+Der Pfad zur Log-Datei steht beim Start (bzw. unter `spoticlean help`),
+typischerweise:
+
+- Linux: `~/.local/state/spoticlean-cli/debug.log`
+- macOS: `~/Library/Logs/spoticlean-cli/debug.log`
+- Windows: `%LOCALAPPDATA%\spoticlean-cli\Log\debug.log`
+
+Am besten in einem zweiten Terminal mitverfolgen: `tail -f <Pfad>`.
+Die Datei enthält niemals den Access-Token (nur, dass einer gesendet
+wurde), sonst aber alles — beim Teilen also kurz auf Songnamen/IDs
+achten, falls das relevant ist.
+
 ## Entwicklung
 
 ```bash
