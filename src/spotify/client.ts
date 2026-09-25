@@ -77,8 +77,26 @@ async function request<T>(path: string, options: RequestOptions = {}, attempt = 
     throw new SpotifyApiError(message, response.status, reason);
   }
 
+  // Endpoints that are documented to return 204 (player control, mainly)
+  // occasionally respond 200 with a non-JSON or empty body instead — since
+  // none of our callers use the body of those calls anyway, only attempt to
+  // parse when the server actually says it sent JSON.
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    return undefined;
+  }
+
   const text = await response.text();
-  return text ? (JSON.parse(text) as T) : undefined;
+  if (!text) return undefined;
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new SpotifyApiError(
+      `Antwort von Spotify (${options.method ?? 'GET'} ${path}, Status ${response.status}) war kein gültiges JSON: ${text.slice(0, 120)}`,
+      response.status
+    );
+  }
 }
 
 export const spotify = {

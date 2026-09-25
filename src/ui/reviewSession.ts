@@ -71,17 +71,12 @@ function renderTrackCard(item: TrackItem, index: number, total: number): void {
   p.note(lines.join('\n'), `Track ${index + 1} / ${total}`);
 }
 
-async function safePlayback(action: () => Promise<void>, onFatal: (reason?: string) => void): Promise<boolean> {
+async function safePlayback(action: () => Promise<void>, onError: (error: unknown) => void): Promise<boolean> {
   try {
     await action();
     return true;
   } catch (error) {
-    if (error instanceof SpotifyApiError && (error.status === 403 || error.status === 404)) {
-      onFatal(error.reason);
-      return false;
-    }
-    // Transient errors (network blip, 5xx) — don't give up on auto-play for the whole session.
-    p.log.warn(`Wiedergabe-Aktion fehlgeschlagen: ${(error as Error).message}`);
+    onError(error);
     return false;
   }
 }
@@ -123,14 +118,27 @@ export async function runReviewSession(
   let index = startOffset;
   let quitEarly = false;
 
-  const onFatalPlaybackError = (reason?: string) => {
-    if (!hasDevice) return;
-    hasDevice = false;
-    if (reason === 'PREMIUM_REQUIRED') {
-      p.log.warn('Automatisches Abspielen benötigt Spotify Premium — verwende ab jetzt nur noch Metadaten.');
-    } else {
-      p.log.warn('Kein aktives Wiedergabegerät mehr gefunden — verwende ab jetzt nur noch Metadaten.');
+  // Only these Spotify error reasons mean auto-play genuinely can't work any
+  // more this session. Everything else (e.g. ALREADY_PAUSED from a stray key
+  // press while a call is still in flight, a transient 5xx, ...) is just
+  // noted and retried on the next action instead of disabling playback.
+  const SESSION_ENDING_REASONS = new Set(['PREMIUM_REQUIRED', 'NO_ACTIVE_DEVICE']);
+
+  const onPlaybackError = (error: unknown) => {
+    const reason = error instanceof SpotifyApiError ? error.reason : undefined;
+
+    if (hasDevice && reason && SESSION_ENDING_REASONS.has(reason)) {
+      hasDevice = false;
+      p.log.warn(
+        reason === 'PREMIUM_REQUIRED'
+          ? 'Automatisches Abspielen benötigt Spotify Premium — verwende ab jetzt nur noch Metadaten.'
+          : 'Kein aktives Wiedergabegerät mehr gefunden — verwende ab jetzt nur noch Metadaten.'
+      );
+      return;
     }
+
+    const detail = reason ? ` (${reason})` : '';
+    p.log.warn(`Wiedergabe-Aktion fehlgeschlagen${detail}: ${(error as Error).message}`);
   };
 
   await withRawMode(async () => {
@@ -143,7 +151,9 @@ export async function runReviewSession(
       let isPaused = false;
 
       if (hasDevice && !track.is_local) {
-        void safePlayback(() => playTrackAt(track.uri, positionMs, deviceId), onFatalPlaybackError);
+        // Awaited (not fire-and-forget): a pause/seek pressed while this is
+        // still in flight raced it and produced confusing, spurious errors.
+        await safePlayback(() => playTrackAt(track.uri, positionMs, deviceId), onPlaybackError);
       } else if (track.is_local) {
         p.log.message(pc.dim('Lokale Datei — kann nicht über Spotify Connect abgespielt werden.'));
       }
@@ -190,8 +200,8 @@ export async function runReviewSession(
           case ' ':
             if (hasDevice) {
               const ok = isPaused
-                ? await safePlayback(() => resumePlayback(deviceId), onFatalPlaybackError)
-                : await safePlayback(() => pausePlayback(deviceId), onFatalPlaybackError);
+                ? await safePlayback(() => resumePlayback(deviceId), onPlaybackError)
+                : await safePlayback(() => pausePlayback(deviceId), onPlaybackError);
               if (ok) isPaused = !isPaused;
             }
             break;
@@ -199,20 +209,20 @@ export async function runReviewSession(
           case 'l':
             if (hasDevice) {
               positionMs += SEEK_STEP_MS;
-              await safePlayback(() => seek(positionMs, deviceId), onFatalPlaybackError);
+              await safePlayback(() => seek(positionMs, deviceId), onPlaybackError);
             }
             break;
           case ',':
           case 'h':
             if (hasDevice) {
               positionMs = Math.max(0, positionMs - SEEK_STEP_MS);
-              await safePlayback(() => seek(positionMs, deviceId), onFatalPlaybackError);
+              await safePlayback(() => seek(positionMs, deviceId), onPlaybackError);
             }
             break;
           case 'b':
             if (hasDevice) {
               positionMs = estimateChorusPositionMs(track.duration_ms);
-              await safePlayback(() => seek(positionMs, deviceId), onFatalPlaybackError);
+              await safePlayback(() => seek(positionMs, deviceId), onPlaybackError);
             }
             break;
           default:
