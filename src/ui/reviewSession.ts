@@ -6,7 +6,7 @@ import { loadConfig, updateConfig } from '../config.js';
 import { SpotifyApiError } from '../spotify/client.js';
 import { estimateChorusPositionMs, pausePlayback, playTrackAt, resumePlayback, seek } from '../spotify/playback.js';
 import { fetchAllTracks, removeTrack, restoreTrack, type TrackSource } from '../spotify/tracks.js';
-import type { SpotifyTrack } from '../spotify/types.js';
+import type { SpotifyTrack, TrackItem } from '../spotify/types.js';
 import { isInteractiveTerminal, readKey, withRawMode } from './keypress.js';
 import { buildReviewFrame, type LogLine } from './reviewFrame.js';
 import { enterAltScreen, exitAltScreen, paintFrame, terminalHeight, terminalWidth } from './terminal.js';
@@ -79,12 +79,22 @@ export async function runReviewSession(
   }
 
   // Loading + resume choice still happen in the normal scrollback via clack —
-  // only the review loop itself takes over the full screen.
+  // only the review loop itself takes over the full screen. Not covered by
+  // the per-track safety net further down (that only wraps the review loop
+  // itself), so it needs its own: otherwise a failure here is an unhandled
+  // rejection with a bare, contextless message ("Forbidden") instead of a
+  // clear "loading X failed" one.
   const spinner = p.spinner();
   spinner.start(`Lade Songs aus "${source.name}"…`);
-  const tracks = await fetchAllTracks(source, (loaded, loadedTotal) => {
-    spinner.message(`Lade Songs aus "${source.name}"… (${loaded}/${loadedTotal})`);
-  });
+  let tracks: TrackItem[];
+  try {
+    tracks = await fetchAllTracks(source, (loaded, loadedTotal) => {
+      spinner.message(`Lade Songs aus "${source.name}"… (${loaded}/${loadedTotal})`);
+    });
+  } catch (error) {
+    spinner.stop(`Laden von "${source.name}" fehlgeschlagen.`, 1);
+    throw new Error(`Songs aus "${source.name}" konnten nicht geladen werden: ${(error as Error).message}`);
+  }
   spinner.stop(`${tracks.length} Songs geladen.`);
 
   const startOffset = await loadResumeOffset(source, tracks.length);
