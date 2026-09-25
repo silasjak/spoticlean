@@ -61,11 +61,14 @@ export async function removeTrack(source: TrackSource, track: SpotifyTrack): Pro
   }
 
   // /me/tracks addresses tracks by id, which local files don't have — fail
-  // with a clear message instead of sending {ids:[null]} to the API.
+  // with a clear message instead of sending ids=null to the API.
   if (!track.id) {
     throw new Error('Lokale Dateien können nicht aus Liked Songs entfernt werden.');
   }
-  await spotify.delete('/me/tracks', { ids: [track.id] });
+  // `ids` as a query param rather than a JSON body (both are valid per the
+  // Spotify API) — some proxies/firewalls block or strip the body on a
+  // DELETE request, which otherwise surfaces as an opaque, content-less 403.
+  await spotify.delete('/me/tracks', undefined, { ids: track.id });
 }
 
 /** Re-adds a track that was just removed. Used for the "undo" action. */
