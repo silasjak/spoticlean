@@ -1,0 +1,65 @@
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import envPaths from 'env-paths';
+
+export type Tokens = {
+  accessToken: string;
+  refreshToken: string;
+  /** Epoch ms at which the access token expires. */
+  expiresAt: number;
+  scope: string;
+};
+
+export type ResumeState = {
+  /** Index of the next track to review (0-based), within the order the API returned. */
+  offset: number;
+  total: number;
+  updatedAt: string;
+};
+
+export type StoredConfig = {
+  clientId?: string;
+  redirectPort?: number;
+  tokens?: Tokens;
+  /** Keyed by playlist id, or the literal "liked-songs". */
+  resume?: Record<string, ResumeState>;
+};
+
+const paths = envPaths('spoticlean-cli', { suffix: '' });
+const configFile = path.join(paths.config, 'config.json');
+
+let cache: StoredConfig | undefined;
+
+async function ensureDir() {
+  await mkdir(paths.config, { recursive: true });
+}
+
+export async function loadConfig(): Promise<StoredConfig> {
+  if (cache) return cache;
+  try {
+    const raw = await readFile(configFile, 'utf8');
+    cache = JSON.parse(raw) as StoredConfig;
+  } catch {
+    cache = {};
+  }
+  return cache;
+}
+
+export async function saveConfig(config: StoredConfig): Promise<void> {
+  cache = config;
+  await ensureDir();
+  await writeFile(configFile, JSON.stringify(config, null, 2), 'utf8');
+}
+
+export async function updateConfig(
+  patch: (config: StoredConfig) => StoredConfig | void
+): Promise<StoredConfig> {
+  const current = await loadConfig();
+  const result = patch(current) ?? current;
+  await saveConfig(result);
+  return result;
+}
+
+export function configFilePath(): string {
+  return configFile;
+}

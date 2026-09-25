@@ -1,0 +1,39 @@
+{
+  "name": "spoticlean-cli",
+  "version": "0.1.0",
+  "description": "Interactive CLI to clean up your Spotify playlists and Liked Songs — hear the chorus instantly, then keep or remove.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "bin": {
+    "spoticlean": "./dist/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsup src/index.ts --format esm --clean --shims --target node20",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "tsx --test src/**/*.test.ts"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.9.1",
+    "env-paths": "^3.0.0",
+    "gradient-string": "^3.0.0",
+    "open": "^10.1.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@types/gradient-string": "^1.1.6",
+    "@types/node": "^20.14.0",
+    "eslint": "^9.15.0",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.16.0"
+  }
+}
