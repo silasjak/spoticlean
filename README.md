@@ -22,16 +22,28 @@ Diese App nutzt **OAuth Authorization Code + PKCE** — es wird nur eine
 **Client ID** benötigt, kein Client Secret (die Client ID ist nicht
 geheim).
 
-1. Öffne das [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-   und erstelle eine neue App.
-2. Trage unter **Redirect URIs** genau ein:
-   ```
-   http://127.0.0.1:8888/callback
-   ```
-3. Kopiere die **Client ID**.
+Das ist ein rein manueller Schritt auf Spotifys eigener Seite — es gibt
+keine API, über die eine CLI das für dich erledigen könnte. Alles danach
+läuft komplett über `spoticlean` selbst, ohne dass du je eine Datei
+anfassen musst:
 
-Die CLI fragt beim ersten Start danach und speichert sie lokal (siehe
-[Konfiguration](#konfiguration)). Alternativ kannst du sie vorab setzen:
+1. Öffne das [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+   und erstelle eine neue App **mit deinem eigenen Spotify-Account**.
+2. Beim ersten Start von `spoticlean` fragt die CLI zuerst nach einem
+   lokalen Port (Standard `8888`) und zeigt dir danach genau die Redirect
+   URI, die du bei Spotify eintragen musst (z. B.
+   `http://127.0.0.1:8888/callback`).
+3. Kopiere die **Client ID** aus den App-Einstellungen und gib sie in
+   der CLI ein, wenn sie danach fragt (kein Secret nötig).
+
+Client ID, Port und Tokens werden danach automatisch lokal gespeichert
+(siehe [Konfiguration](#konfiguration)). Falls sich der Port mit etwas
+anderem auf deinem Rechner beißt, oder du die Client ID neu eintragen
+willst: `spoticlean setup` fragt beides erneut ab — kein manuelles
+Editieren von Config-Dateien nötig.
+
+Für Skripte/CI gibt es zusätzlich `SPOTICLEAN_CLIENT_ID` (und optional
+`SPOTICLEAN_PORT`) als Umgebungsvariablen, die den Prompt überspringen:
 
 ```bash
 cp .env.example .env
@@ -94,6 +106,7 @@ Client ID, Tokens und Fortschritt liegen lokal unter:
 - Windows: `%APPDATA%\spoticlean-cli\Config\config.json`
 
 ```bash
+spoticlean setup    # Client ID / Port neu einrichten
 spoticlean logout   # gespeicherte Anmeldung entfernen
 ```
 
@@ -112,6 +125,25 @@ Anhören) beurteilen.
 Die „Refrain-Position“ ist eine grobe Heuristik (40 % der Songlänge),
 keine echte Musikanalyse — bei ungewöhnlichen Songstrukturen also
 einfach mit `,`/`.`/`b` nachjustieren.
+
+## Nutzung durch andere Personen
+
+Das Repo ist **privat** — clonen kann nur, wer als GitHub-Collaborator
+eingeladen ist (oder Zugriff über eine Organisation hat). Wer Zugriff
+hat, kann das Tool aber komplett eigenständig nutzen: es gibt keinen
+gemeinsam genutzten Zugang und keine geteilten Secrets im Code. Jede
+Person durchläuft einmal die [Einrichtung](#einmalige-einrichtung-spotify-app)
+mit ihrem **eigenen** Spotify-Account und ihrer **eigenen**, kostenlosen
+Spotify-App — danach läuft `spoticlean` bei ihr unter ihrem eigenen
+Account, unabhängig von allen anderen.
+
+(Alternative, falls du stattdessen *eine* gemeinsame Spotify-App für
+eine kleine, feste Gruppe betreiben willst: Spotify-Apps im
+"Development Mode" erlauben bis zu 25 Accounts, die du im Dashboard
+namentlich freischalten müsstest — mehr Aufwand für dich als App-Owner,
+dafür entfällt der Setup-Schritt für die anderen. Für "jeder, der
+Zugriff auf das Repo hat, kann es einfach benutzen" ist die
+Standard-Variante mit eigener App pro Person aber die unkompliziertere.)
 
 ## Bekannte Einschränkungen
 

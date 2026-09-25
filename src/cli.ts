@@ -1,7 +1,7 @@
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 
-import { logout } from './auth/session.js';
+import { logout, runSetup } from './auth/session.js';
 import { configFilePath } from './config.js';
 import { AuthCancelled } from './errors.js';
 import { printBanner } from './ui/banner.js';
@@ -42,12 +42,29 @@ export async function main(argv: string[]): Promise<void> {
     return;
   }
 
+  if (command === 'setup') {
+    printBanner();
+    p.intro(pc.bgGreen(pc.black(' spoticlean-cli setup ')));
+    try {
+      await runSetup();
+      p.outro(pc.green('Bereit! ✨'));
+    } catch (error) {
+      if (p.isCancel(error) || error instanceof AuthCancelled) {
+        p.cancel('Abgebrochen.');
+        return;
+      }
+      throw error;
+    }
+    return;
+  }
+
   if (command === 'help' || command === '--help' || command === '-h') {
     console.log(
       [
         'spoticlean [command]',
         '',
-        '  (kein Befehl)   Playlist aufräumen',
+        '  (kein Befehl)   Playlist aufräumen (fragt bei Erstnutzung automatisch nach Setup)',
+        '  setup           Spotify-App (Client ID) / Port neu einrichten',
         '  logout          Gespeicherte Anmeldung entfernen',
         '  help            Diese Hilfe',
         '',

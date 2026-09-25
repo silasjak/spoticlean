@@ -12,12 +12,32 @@ const DEFAULT_PORT = 8888;
 /** Refresh a bit before actual expiry to avoid racing a request against it. */
 const EXPIRY_SAFETY_MARGIN_MS = 60_000;
 
-async function promptClientId(port: number): Promise<string> {
-  p.log.step('Spotify-App wird benötigt');
+/**
+ * Every user needs their own free Spotify app (just a Client ID — no
+ * secret, since this uses PKCE). That's unavoidable: Spotify doesn't
+ * offer an API to create dashboard apps on someone's behalf, it's a
+ * one-time manual step on Spotify's own website. Everything past that
+ * point (this prompt included) is handled entirely by the CLI, no config
+ * files to hand-edit.
+ */
+async function promptAppSetup(defaultPort: number): Promise<{ clientId: string; port: number }> {
+  const portInput = await p.text({
+    message: 'Auf welchem lokalen Port soll die Anmeldung ankommen?',
+    initialValue: String(defaultPort),
+    validate: (value) => {
+      const n = Number(value);
+      if (!Number.isInteger(n) || n < 1024 || n > 65535) return 'Bitte einen Port zwischen 1024 und 65535 angeben.';
+      return undefined;
+    },
+  });
+  if (p.isCancel(portInput)) throw new AuthCancelled();
+  const port = Number(portInput);
+
+  p.log.step('Spotify-App wird benötigt (einmalig, pro Person)');
   p.note(
     [
-      `${pc.bold('1.')} Öffne ${pc.cyan('https://developer.spotify.com/dashboard')} und erstelle eine App.`,
-      `${pc.bold('2.')} Trage als Redirect URI genau das hier ein:`,
+      `${pc.bold('1.')} Öffne ${pc.cyan('https://developer.spotify.com/dashboard')} und erstelle eine App (mit deinem eigenen Spotify-Account).`,
+      `${pc.bold('2.')} Trage als Redirect URI ${pc.bold('genau')} das hier ein:`,
       `   ${pc.green(redirectUriFor(port))}`,
       `${pc.bold('3.')} Kopiere die "Client ID" aus den App-Einstellungen (kein Secret nötig).`,
     ].join('\n'),
@@ -28,9 +48,9 @@ async function promptClientId(port: number): Promise<string> {
     message: 'Spotify Client ID',
     validate: (value) => (value.trim().length === 0 ? 'Client ID darf nicht leer sein.' : undefined),
   });
-
   if (p.isCancel(clientId)) throw new AuthCancelled();
-  return clientId.trim();
+
+  return { clientId: clientId.trim(), port };
 }
 
 async function performLogin(clientId: string, port: number): Promise<Tokens> {
@@ -82,10 +102,19 @@ async function performLogin(clientId: string, port: number): Promise<Tokens> {
  */
 export async function getAccessToken(): Promise<string> {
   const config = await loadConfig();
-  const port = config.redirectPort ?? DEFAULT_PORT;
 
-  const clientId = config.clientId ?? process.env.SPOTICLEAN_CLIENT_ID ?? (await promptClientId(port));
-  if (clientId !== config.clientId) {
+  let clientId = config.clientId;
+  let port = config.redirectPort ?? DEFAULT_PORT;
+
+  if (!clientId) {
+    // Env vars are an optional shortcut for advanced/scripted use — the
+    // interactive prompt below covers everyone else, no file editing needed.
+    if (process.env.SPOTICLEAN_CLIENT_ID) {
+      clientId = process.env.SPOTICLEAN_CLIENT_ID;
+      port = Number(process.env.SPOTICLEAN_PORT ?? port) || port;
+    } else {
+      ({ clientId, port } = await promptAppSetup(port));
+    }
     await updateConfig((c) => {
       c.clientId = clientId;
       c.redirectPort = port;
@@ -126,6 +155,27 @@ export async function logout(): Promise<void> {
   await updateConfig((c) => {
     delete c.tokens;
   });
+}
+
+/**
+ * Explicitly (re-)runs the one-time setup — asks for port + Client ID again
+ * (e.g. to fix a typo, switch Spotify apps, or resolve a port conflict) and
+ * logs in right away. Entirely CLI-driven; never requires touching config.json.
+ */
+export async function runSetup(): Promise<void> {
+  const config = await loadConfig();
+  const { clientId, port } = await promptAppSetup(config.redirectPort ?? DEFAULT_PORT);
+  await updateConfig((c) => {
+    c.clientId = clientId;
+    c.redirectPort = port;
+    delete c.tokens;
+  });
+
+  const tokens = await performLogin(clientId, port);
+  await updateConfig((c) => {
+    c.tokens = tokens;
+  });
+  p.log.success('Einrichtung abgeschlossen und angemeldet.');
 }
 
 /** Forces the next getAccessToken() call to refresh instead of using the cache. */

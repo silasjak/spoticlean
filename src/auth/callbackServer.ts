@@ -87,8 +87,16 @@ export function waitForAuthorizationCode(options: {
       setTimeout(() => server.close(), 50);
     }
 
-    server.on('error', (err) => {
+    server.on('error', (err: NodeJS.ErrnoException) => {
       clearTimeout(timeout);
+      if (err.code === 'EADDRINUSE') {
+        reject(
+          new Error(
+            `Port ${port} ist bereits belegt. Führe "spoticlean setup" aus und wähle einen anderen Port.`
+          )
+        );
+        return;
+      }
       reject(err);
     });
 
