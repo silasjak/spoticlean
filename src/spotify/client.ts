@@ -38,6 +38,12 @@ async function request<T>(path: string, options: RequestOptions = {}, attempt = 
     method: options.method ?? 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+      // Node's fetch sends no User-Agent by default; some network-level
+      // filters (proxies, WAFs) treat that as bot-like and block the
+      // request with a bare, content-less 403 before it ever reaches
+      // Spotify's own API logic.
+      'User-Agent': 'spoticlean-cli (+https://github.com/silasjak/spoticlean-cli)',
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
@@ -59,22 +65,39 @@ async function request<T>(path: string, options: RequestOptions = {}, attempt = 
   }
 
   if (!response.ok) {
+    const rawText = await response.text();
     let reason: string | undefined;
     let message = response.statusText;
-    try {
-      const payload = (await response.json()) as {
-        error?: { message?: string; reason?: string } | string;
-      };
-      if (typeof payload.error === 'object' && payload.error) {
-        message = payload.error.message ?? message;
-        reason = payload.error.reason;
-      } else if (typeof payload.error === 'string') {
-        message = payload.error;
+    let matchedSpotifyShape = false;
+
+    if (rawText) {
+      try {
+        const payload = JSON.parse(rawText) as { error?: { message?: string; reason?: string } | string };
+        if (typeof payload.error === 'object' && payload.error) {
+          message = payload.error.message ?? message;
+          reason = payload.error.reason;
+          matchedSpotifyShape = true;
+        } else if (typeof payload.error === 'string') {
+          message = payload.error;
+          matchedSpotifyShape = true;
+        }
+      } catch {
+        // not JSON at all
       }
-    } catch {
-      // response wasn't JSON — keep the statusText as the message
+
+      // A body that isn't Spotify's usual {error:{...}} shape — e.g. a
+      // proxy/WAF block page — is exactly what's worth seeing to tell that
+      // apart from a genuine, informative Spotify API error.
+      if (!matchedSpotifyShape) {
+        message = `${message} — ${rawText.replace(/\s+/g, ' ').trim().slice(0, 160)}`;
+      }
     }
-    throw new SpotifyApiError(message, response.status, reason);
+
+    // If Spotify (or whatever answered) gave us a request id, include it —
+    // useful when reporting a persistent issue.
+    const traceId =
+      response.headers.get('client-trace-id') ?? response.headers.get('x-request-id') ?? undefined;
+    throw new SpotifyApiError(traceId ? `${message} [trace: ${traceId}]` : message, response.status, reason);
   }
 
   // Endpoints that are documented to return 204 (player control, mainly)
