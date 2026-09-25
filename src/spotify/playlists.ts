@@ -18,7 +18,9 @@ export async function listOwnedPlaylists(me: Me): Promise<SimplifiedPlaylist[]> 
       offset,
     })) as Paging<SimplifiedPlaylist>;
 
-    owned.push(...page.items.filter((playlist) => playlist.owner.id === me.id));
+    // Spotify occasionally returns a `null` item (e.g. a playlist that was
+    // deleted right after being listed) — skip those rather than crash.
+    owned.push(...page.items.filter((playlist) => playlist?.owner?.id === me.id));
 
     if (!page.next) break;
     offset += PAGE_SIZE;

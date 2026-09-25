@@ -40,7 +40,9 @@ export type Paging<T> = {
 export type SimplifiedPlaylist = {
   id: string;
   name: string;
-  tracks: { total: number };
+  // Spotify's API occasionally omits this (e.g. for certain algorithmic or
+  // migrating playlists) — treat it as unknown rather than assuming it.
+  tracks?: { total: number } | null;
   owner: { id: string; display_name: string | null };
   collaborative: boolean;
 };

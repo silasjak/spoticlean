@@ -13,20 +13,32 @@ export async function selectSource(): Promise<{ source: TrackSource; total: numb
 
   spinner.stop(`${playlists.length} eigene Playlist(en) gefunden.`);
 
+  const unknownCountPlaylists = playlists.filter((playlist) => playlist.tracks?.total == null);
+  if (unknownCountPlaylists.length > 0) {
+    p.log.warn(
+      `Spotify hat für ${unknownCountPlaylists.length} Playlist(en) keine Song-Anzahl geliefert: ` +
+        unknownCountPlaylists.map((playlist) => `"${playlist.name}"`).join(', ') +
+        '. Das Aufräumen funktioniert trotzdem — nur die Anzeige "? Songs" ist ungenau.'
+    );
+  }
+
   const options: { value: { source: TrackSource; total: number }; label: string; hint: string }[] = [
     {
       value: { source: { kind: 'liked', name: 'Liked Songs' }, total: likedTotal },
       label: `💚 Liked Songs`,
       hint: `${likedTotal} Songs`,
     },
-    ...playlists.map((playlist) => ({
-      value: {
-        source: { kind: 'playlist' as const, id: playlist.id, name: playlist.name },
-        total: playlist.tracks.total,
-      },
-      label: playlist.name,
-      hint: `${playlist.tracks.total} Songs`,
-    })),
+    ...playlists.map((playlist) => {
+      const total = playlist.tracks?.total;
+      return {
+        value: {
+          source: { kind: 'playlist' as const, id: playlist.id, name: playlist.name },
+          total: total ?? 0,
+        },
+        label: playlist.name,
+        hint: total == null ? '? Songs' : `${total} Songs`,
+      };
+    }),
   ];
 
   const choice = await p.select({
