@@ -23,6 +23,7 @@
   "dependencies": {
     "@clack/prompts": "^0.9.1",
     "env-paths": "^3.0.0",
+    "figlet": "^1.11.4",
     "gradient-string": "^3.0.0",
     "open": "^10.1.0",
     "picocolors": "^1.1.1"
