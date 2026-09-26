@@ -8,13 +8,13 @@ import { estimateChorusPositionMs, pausePlayback, playTrackAt, resumePlayback, s
 import { fetchAllTracks, removeTrack, restoreTrack, type TrackSource } from '../spotify/tracks.js';
 import type { SpotifyTrack, TrackItem } from '../spotify/types.js';
 import { isInteractiveTerminal, readKey, withRawMode } from './keypress.js';
-import { buildReviewFrame, type LogLine } from './reviewFrame.js';
+import { buildReviewFrame, type Decision, type StatusLine } from './reviewFrame.js';
 import { enterAltScreen, exitAltScreen, paintFrame, terminalHeight, terminalWidth } from './terminal.js';
 
 const SEEK_STEP_MS = 10_000;
 
-type Decision = 'kept' | 'removed';
-type HistoryEntry = { index: number; action: Decision; track: SpotifyTrack };
+/** One already-decided track, in review order. Superset of reviewFrame's HistoryEntry (adds `index`, needed to jump/undo). */
+type SessionHistoryEntry = { index: number; track: SpotifyTrack; decision: Decision };
 
 function resumeKeyFor(source: TrackSource): string {
   return source.kind === 'liked' ? 'liked-songs' : `playlist:${source.id}`;
@@ -100,8 +100,8 @@ export async function runReviewSession(
   const startOffset = await loadResumeOffset(source, tracks.length);
 
   const decisions = new Map<number, Decision>();
-  const history: HistoryEntry[] = [];
-  const log: LogLine[] = [];
+  const history: SessionHistoryEntry[] = [];
+  let status: StatusLine | undefined;
   let hasDevice = Boolean(deviceId);
   let quitEarly = false;
 
@@ -111,15 +111,12 @@ export async function runReviewSession(
   // track/position, not a stale snapshot from when it was defined.
   const view = { index: startOffset, positionMs: 0, isPaused: false };
 
-  function pushLog(text: string, color?: (t: string) => string): void {
-    log.push({ text, color });
-    render();
-  }
+  // Index into `history` that's highlighted while browsing with ↑/↓, or
+  // null in the normal (not browsing) state.
+  let historyCursor: number | null = null;
 
-  function replaceLastLog(text: string, color?: (t: string) => string): void {
-    const entry: LogLine = { text, color };
-    if (log.length > 0) log[log.length - 1] = entry;
-    else log.push(entry);
+  function setStatus(text: string, color?: (t: string) => string): void {
+    status = { text, color };
     render();
   }
 
@@ -133,7 +130,9 @@ export async function runReviewSession(
         hasDevice,
         positionMs: view.positionMs,
         isPaused: view.isPaused,
-        log,
+        history,
+        historyCursor,
+        status,
         width: terminalWidth(),
         height: terminalHeight(),
       })
@@ -151,7 +150,7 @@ export async function runReviewSession(
 
     if (hasDevice && reason && SESSION_ENDING_REASONS.has(reason)) {
       hasDevice = false;
-      pushLog(
+      setStatus(
         reason === 'PREMIUM_REQUIRED'
           ? 'Automatisches Abspielen benötigt Spotify Premium — nur noch Metadaten.'
           : 'Kein aktives Wiedergabegerät mehr gefunden — nur noch Metadaten.',
@@ -161,13 +160,44 @@ export async function runReviewSession(
     }
 
     const detail = reason ? ` (${reason})` : '';
-    pushLog(`Wiedergabe-Aktion fehlgeschlagen${detail}: ${(error as Error).message}`, pc.yellow);
+    setStatus(`Wiedergabe-Aktion fehlgeschlagen${detail}: ${(error as Error).message}`, pc.yellow);
   };
 
   const onResize = () => render();
 
   enterAltScreen();
   process.stdout.on('resize', onResize);
+
+  // Undoes exactly the most recent decision (pops `history`, restores via
+  // the API if it had been removed). Shared by the plain `u` key and by
+  // jumpBackTo()'s multi-step rewind.
+  async function undoOne(): Promise<void> {
+    const last = history.pop();
+    if (!last) return;
+    decisions.delete(last.index);
+    view.index = last.index;
+
+    if (last.decision === 'removed') {
+      setStatus(`Wiederherstellen: ${last.track.name}…`, pc.dim);
+      try {
+        await restoreTrack(source, last.track);
+        setStatus(`↺ Wiederhergestellt: ${last.track.name}`, pc.dim);
+      } catch (error) {
+        setStatus(`Wiederherstellen fehlgeschlagen: ${(error as Error).message}`, pc.red);
+      }
+    } else {
+      setStatus(`↺ Zurückgenommen: ${last.track.name}`, pc.dim);
+    }
+  }
+
+  // Rewinds every decision back to (and including) `targetIndex`, same as
+  // pressing `u` repeatedly — used to confirm a jump picked in the history
+  // browser. Sequential (not parallel), same as a human mashing undo.
+  async function jumpBackTo(targetIndex: number): Promise<void> {
+    while (history.length > 0 && history[history.length - 1]!.index >= targetIndex) {
+      await undoOne();
+    }
+  }
 
   // Reviews the track currently at view.index: shows it, plays it, waits for
   // a key, applies the decision. Returns true when the user asked to quit.
@@ -201,7 +231,38 @@ export async function runReviewSession(
           ? 'enter'
           : key.name === 'backspace' || key.name === 'delete' || key.char === '\u007f'
             ? 'backspace'
-            : key.char?.toLowerCase();
+            : key.name === 'up' || key.name === 'down' || key.name === 'escape'
+              ? key.name
+              : key.char?.toLowerCase();
+
+      // While a history entry is highlighted, ↑/↓/Enter/Esc drive the
+      // browser and everything else (k, r, space, ...) is ignored — they'd
+      // otherwise silently apply to the *current*, not-yet-decided track.
+      if (historyCursor !== null) {
+        switch (normalized) {
+          case 'up':
+            historyCursor = Math.max(0, historyCursor - 1);
+            render();
+            break;
+          case 'down':
+            historyCursor = historyCursor + 1 >= history.length ? null : historyCursor + 1;
+            render();
+            break;
+          case 'escape':
+            historyCursor = null;
+            render();
+            break;
+          case 'enter': {
+            const target = history[historyCursor]!.index;
+            historyCursor = null;
+            await jumpBackTo(target);
+            return false; // re-enter reviewOneTrack fresh for the now-current index
+          }
+          default:
+            break;
+        }
+        continue;
+      }
 
       switch (normalized) {
         case 'enter':
@@ -218,9 +279,15 @@ export async function runReviewSession(
         case 'u':
           action = 'undo';
           break;
+        case 'up':
+          if (history.length > 0) {
+            historyCursor = history.length - 1;
+            render();
+          }
+          break;
         case 'o':
           openInSpotify(track);
-          pushLog(`In Spotify geöffnet: ${track.name}`, pc.dim);
+          setStatus(`In Spotify geöffnet: ${track.name}`, pc.dim);
           break;
         case ' ':
           if (hasDevice) {
@@ -265,42 +332,27 @@ export async function runReviewSession(
     }
 
     if (action === 'undo') {
-      const last = history.pop();
-      if (!last) {
-        pushLog('Nichts zum Zurücknehmen.', pc.dim);
+      if (history.length === 0) {
+        setStatus('Nichts zum Zurücknehmen.', pc.dim);
         return false;
       }
-
-      decisions.delete(last.index);
-      view.index = last.index;
-
-      if (last.action === 'removed') {
-        pushLog(`Wiederherstellen: ${last.track.name}…`, pc.dim);
-        try {
-          await restoreTrack(source, last.track);
-          replaceLastLog(`↺ Wiederhergestellt: ${last.track.name}`, pc.dim);
-        } catch (error) {
-          replaceLastLog(`Wiederherstellen fehlgeschlagen: ${(error as Error).message}`, pc.red);
-        }
-      } else {
-        pushLog(`↺ Zurückgenommen: ${last.track.name}`, pc.dim);
-      }
+      await undoOne();
       return false;
     }
 
     decisions.set(view.index, action);
-    history.push({ index: view.index, action, track });
+    history.push({ index: view.index, decision: action, track });
 
     if (action === 'removed') {
-      pushLog(`Entferne: ${track.name}…`, pc.dim);
+      setStatus(`Entferne: ${track.name}…`, pc.dim);
       try {
         await removeTrack(source, track);
-        replaceLastLog(`✗ Entfernt: ${track.name}`, pc.red);
+        setStatus(`✗ Entfernt: ${track.name}`, pc.red);
       } catch (error) {
-        replaceLastLog(`Entfernen fehlgeschlagen (${track.name}): ${(error as Error).message}`, pc.red);
+        setStatus(`Entfernen fehlgeschlagen (${track.name}): ${(error as Error).message}`, pc.red);
       }
     } else {
-      pushLog(`✓ Behalten: ${track.name}`, pc.green);
+      setStatus(`✓ Behalten: ${track.name}`, pc.green);
     }
 
     view.index += 1;
@@ -319,7 +371,7 @@ export async function runReviewSession(
           const shouldQuit = await reviewOneTrack();
           if (shouldQuit) break;
         } catch (error) {
-          pushLog(`Unerwarteter Fehler: ${(error as Error).message} — springe zum nächsten Song.`, pc.red);
+          setStatus(`Unerwarteter Fehler: ${(error as Error).message} — springe zum nächsten Song.`, pc.red);
           view.index += 1;
           await saveResumeOffset(source, view.index, tracks.length).catch(() => undefined);
         }

@@ -18,7 +18,7 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "FORCE_COLOR=1 tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@clack/prompts": "^0.9.1",

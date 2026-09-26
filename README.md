@@ -88,6 +88,7 @@ Pro Song wird sofort versucht, an einer geschätzten Refrain-Stelle
 | ----------------- | ------------------------------------------------ |
 | `Enter` / `k`     | **Keep** — Song bleibt in der Playlist            |
 | `⌫` (Backspace) / `r` | **Remove** — Song wird sofort entfernt        |
+| `↑` / `↓`         | Verlauf durchblättern (siehe unten)               |
 | `u`               | Undo — letzte Entscheidung zurücknehmen           |
 | `Leertaste`       | Pause / Weiter                                    |
 | `,` / `.`         | 10s zurück / vor                                  |
@@ -100,6 +101,17 @@ Ende), `u` macht das zuverlässig rückgängig (Song wird wieder
 hinzugefügt). Der Fortschritt (welcher Song als nächstes kommt) wird
 lokal gespeichert — brichst du ab, kannst du beim nächsten Start dort
 weitermachen.
+
+### Im Verlauf blättern und einen älteren Song neu entscheiden
+
+Der "Verlauf"-Bereich zeigt alle bereits entschiedenen Songs. Mit `↑`
+markierst du den letzten Eintrag; mit `↑`/`↓` bewegst du die Markierung
+weiter, auch über den sichtbaren Ausschnitt hinaus (er scrollt mit).
+`Enter` auf einem markierten Song springt dorthin zurück, spielt ihn
+erneut ab und du entscheidest frisch (Keep/Remove) — alles danach wird
+dabei automatisch rückgängig gemacht (wie mehrfaches `u`, nur mit
+Sichtkontrolle statt Blindflug); danach geht es normal weiter. `Esc`
+bricht das Blättern ohne Änderung ab.
 
 ## Konfiguration
 

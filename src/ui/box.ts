@@ -33,11 +33,14 @@ export function boxBottom(width: number): string {
  * already fit within `innerWidth(width, indent)` — truncate the *plain*
  * text with `fitWidth()` before applying color, since slicing already-
  * colored text can cut an escape sequence in half and bleed color onto
- * everything after it.
+ * everything after it. With `invert`, the padded content (padding
+ * included, borders excluded) is shown in inverse video — used to
+ * highlight a selected row without needing its own foreground color.
  */
-export function boxLine(content: string, width: number, indent = 1): string {
+export function boxLine(content: string, width: number, indent = 1, invert = false): string {
   const pad = ' '.repeat(Math.max(0, innerWidth(width, indent) - visibleLength(content)));
-  return pc.dim('│') + ' '.repeat(indent) + content + pad + pc.dim('│');
+  const body = ' '.repeat(indent) + content + pad;
+  return pc.dim('│') + (invert ? pc.inverse(body) : body) + pc.dim('│');
 }
 
 export function innerWidth(width: number, indent = 1): number {

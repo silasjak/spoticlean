@@ -4,15 +4,23 @@ import { visibleLength } from './terminal.js';
 
 type KeyHint = { key: string; desc: string; requiresDevice?: boolean };
 
-const KEY_HINTS: KeyHint[] = [
+const REVIEW_HINTS: KeyHint[] = [
   { key: '⏎/k', desc: 'keep' },
   { key: '⌫/r', desc: 'remove' },
+  { key: '↑/↓', desc: 'Verlauf' },
   { key: 'u', desc: 'undo' },
   { key: '␣', desc: 'pause', requiresDevice: true },
   { key: ',/.', desc: 'seek', requiresDevice: true },
   { key: 'b', desc: 'refrain', requiresDevice: true },
   { key: 'o', desc: 'open' },
   { key: 'q', desc: 'quit' },
+];
+
+/** Shown instead of REVIEW_HINTS while a history entry is highlighted (browsing mode). */
+const BROWSE_HINTS: KeyHint[] = [
+  { key: '↑/↓', desc: 'auswählen' },
+  { key: '⏎', desc: 'dorthin springen & neu entscheiden' },
+  { key: 'Esc', desc: 'abbrechen' },
 ];
 
 const SEPARATOR = '   ';
@@ -25,8 +33,8 @@ function renderHint(hint: KeyHint): string {
  * Packs the key legend into as few lines as fit `maxWidth`, wrapping to a
  * second (or third) line on a narrow terminal instead of overflowing.
  */
-export function buildKeyHintLines(hasDevice: boolean, maxWidth: number): string[] {
-  const hints = KEY_HINTS.filter((hint) => hasDevice || !hint.requiresDevice);
+export function buildKeyHintLines(hasDevice: boolean, maxWidth: number, browsing = false): string[] {
+  const hints = (browsing ? BROWSE_HINTS : REVIEW_HINTS).filter((hint) => hasDevice || !hint.requiresDevice);
   const lines: string[] = [];
   let current = '';
 

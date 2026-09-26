@@ -1,25 +1,30 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { TrackItem } from '../spotify/types.js';
+import type { SpotifyTrack, TrackItem } from '../spotify/types.js';
 import { visibleLength } from './terminal.js';
-import { buildReviewFrame, type LogLine } from './reviewFrame.js';
+import { buildReviewFrame, type Decision, type HistoryEntry } from './reviewFrame.js';
 
-function makeItem(overrides: Partial<TrackItem['track']> = {}): TrackItem {
+function makeTrack(name: string, overrides: Partial<SpotifyTrack> = {}): SpotifyTrack {
   return {
-    added_at: '2026-01-02T00:00:00Z',
-    track: {
-      id: '1',
-      uri: 'spotify:track:1',
-      name: 'Ein Song',
-      duration_ms: 180_000,
-      artists: [{ name: 'Ein Artist' }],
-      album: { name: 'Ein Album', images: [] },
-      preview_url: null,
-      is_local: false,
-      ...overrides,
-    },
+    id: name,
+    uri: `spotify:track:${name}`,
+    name,
+    duration_ms: 180_000,
+    artists: [{ name: 'Ein Artist' }],
+    album: { name: 'Ein Album', images: [] },
+    preview_url: null,
+    is_local: false,
+    ...overrides,
   };
+}
+
+function makeItem(overrides: Partial<SpotifyTrack> = {}): TrackItem {
+  return { added_at: '2026-01-02T00:00:00Z', track: makeTrack('Ein Song', overrides) };
+}
+
+function makeHistory(n: number, decision: Decision = 'kept'): HistoryEntry[] {
+  return Array.from({ length: n }, (_, i) => ({ track: makeTrack(`Song ${i}`), decision }));
 }
 
 function baseState(overrides: Partial<Parameters<typeof buildReviewFrame>[0]> = {}) {
@@ -31,7 +36,8 @@ function baseState(overrides: Partial<Parameters<typeof buildReviewFrame>[0]> = 
     hasDevice: true,
     positionMs: 0,
     isPaused: false,
-    log: [] as LogLine[],
+    history: [] as HistoryEntry[],
+    historyCursor: null,
     width: 80,
     height: 24,
     ...overrides,
@@ -50,7 +56,7 @@ test('never emits more lines than the terminal has rows, once the terminal is ta
   // there's nothing left to shrink — accept the overflow there, since a
   // terminal that short is not a realistic case; paintFrame's own slice()
   // is the last-resort safety net for it.
-  const minimum = buildReviewFrame(baseState({ height: 0, log: [] })).length;
+  const minimum = buildReviewFrame(baseState({ height: 0 })).length;
   for (const height of [minimum, minimum + 1, 24, 40]) {
     const frame = buildReviewFrame(baseState({ height }));
     assert.ok(frame.length <= height, `height=${height} produced ${frame.length} lines`);
@@ -58,30 +64,32 @@ test('never emits more lines than the terminal has rows, once the terminal is ta
 });
 
 test('degenerately small terminals do not throw or grow unbounded', () => {
-  const minimum = buildReviewFrame(baseState({ height: 0, log: [] })).length;
+  const minimum = buildReviewFrame(baseState({ height: 0 })).length;
   for (const height of [3, 1, 0, -5]) {
     const frame = buildReviewFrame(baseState({ height }));
     assert.equal(frame.length, minimum);
   }
 });
 
-test('history grows to fill the space left after header/card/footer', () => {
-  const log: LogLine[] = Array.from({ length: 50 }, (_, i) => ({ text: `Song ${i}` }));
-  const short = buildReviewFrame(baseState({ height: 15, log }));
-  const tall = buildReviewFrame(baseState({ height: 40, log }));
+test('history list grows to fill the space left after header/card/footer', () => {
+  const history = makeHistory(50);
+  const short = buildReviewFrame(baseState({ height: 15, history }));
+  const tall = buildReviewFrame(baseState({ height: 40, history }));
   assert.ok(tall.length > short.length);
   assert.ok(tall.length <= 40);
 });
 
 test('shows a placeholder when nothing has been decided yet', () => {
-  const frame = buildReviewFrame(baseState({ log: [] })).join('\n');
+  const frame = buildReviewFrame(baseState({ history: [] })).join('\n');
   assert.match(frame, /Noch keine Entscheidungen/);
 });
 
 test('omits the "Verlauf" section entirely rather than pushing the footer off-screen', () => {
-  const minimum = buildReviewFrame(baseState({ height: 0, log: [] })).length;
-  const frame = buildReviewFrame(baseState({ height: minimum, log: [{ text: 'x' }] }));
-  assert.doesNotMatch(frame.join('\n'), /Verlauf/);
+  const minimum = buildReviewFrame(baseState({ height: 0 })).length;
+  const frame = buildReviewFrame(baseState({ height: minimum, history: makeHistory(3) }));
+  // The "↑/↓ Verlauf" footer hint legitimately still says "Verlauf" — check
+  // for the section's own divider specifically, not the word anywhere.
+  assert.doesNotMatch(frame.join('\n'), /├─ Verlauf/);
   // The footer (key legend) must still be the last thing on screen.
   assert.match(frame.at(-1) ?? '', /└/);
 });
@@ -110,4 +118,59 @@ test('truncates a very long track/album name instead of overflowing the box', ()
 
 test('handles a missing track (index past the end) without throwing', () => {
   assert.doesNotThrow(() => buildReviewFrame(baseState({ item: undefined })));
+});
+
+test('reserves exactly one status row whether or not there is a message', () => {
+  const empty = buildReviewFrame(baseState()).length;
+  const withStatus = buildReviewFrame(baseState({ status: { text: 'Behalten: X' } })).length;
+  assert.equal(empty, withStatus);
+});
+
+test('the status message appears in the frame', () => {
+  const frame = buildReviewFrame(baseState({ status: { text: 'Ganz besondere Statuszeile' } })).join('\n');
+  assert.match(frame, /Ganz besondere Statuszeile/);
+});
+
+test('browsing mode swaps the footer hints for navigation hints', () => {
+  const normal = buildReviewFrame(baseState({ history: makeHistory(3), historyCursor: null })).join('\n');
+  const browsing = buildReviewFrame(baseState({ history: makeHistory(3), historyCursor: 1 })).join('\n');
+  assert.match(normal, /keep/);
+  assert.doesNotMatch(browsing, /keep/);
+  assert.match(browsing, /springen/);
+});
+
+test('the highlighted history row is rendered in inverse video', () => {
+  const history = makeHistory(3);
+  const frame = buildReviewFrame(baseState({ history, historyCursor: 1 }));
+  const line = frame.find((l) => l.includes('Song 1'));
+  assert.ok(line, 'expected to find the highlighted track in the frame');
+  // eslint-disable-next-line no-control-regex -- deliberately matching the ESC control character (SGR "inverse")
+  assert.match(line!, /\x1b\[7m/); // picocolors' pc.inverse()
+});
+
+test('without a cursor, the history view shows the most recent entries (tail)', () => {
+  const history = makeHistory(50);
+  const frame = buildReviewFrame(baseState({ height: 15, history, historyCursor: null })).join('\n');
+  assert.match(frame, /Song 49/); // most recent
+  assert.doesNotMatch(frame, /Song 0\b/); // long scrolled off
+});
+
+test('scrolling keeps the cursor visible even far back in a long history', () => {
+  const history = makeHistory(50);
+  const frame = buildReviewFrame(baseState({ height: 15, history, historyCursor: 2 })).join('\n');
+  assert.match(frame, /Song 2\b/);
+});
+
+test('scrolling keeps the cursor visible near the very end too', () => {
+  const history = makeHistory(50);
+  const frame = buildReviewFrame(baseState({ height: 15, history, historyCursor: 49 })).join('\n');
+  assert.match(frame, /Song 49/);
+});
+
+test('a short history is never clipped regardless of cursor position', () => {
+  const history = makeHistory(5);
+  for (let cursor = 0; cursor < 5; cursor++) {
+    const frame = buildReviewFrame(baseState({ history, historyCursor: cursor })).join('\n');
+    for (let i = 0; i < 5; i++) assert.match(frame, new RegExp(`Song ${i}\\b`));
+  }
 });
