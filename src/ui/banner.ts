@@ -11,8 +11,8 @@ figlet.parseFont('Slant', slant);
 const spotifyGradient = gradient(['#1DB954', '#1ed760', '#1DB954']);
 
 export function printBanner(): void {
-  // 'full' turns off the font's default letter-smushing (which otherwise
-  // packs adjacent letters right up against each other) for some breathing
-  // room between characters instead.
-  console.log(spotifyGradient.multiline(figlet.textSync('SPOTICLEAN', { font: 'Slant', horizontalLayout: 'full' })));
+  // 'fitted' kerns letters as close as possible without smushing/overlapping
+  // them — a little more breathing room than the font's default smushing,
+  // short of 'full' (which turned out to be too much).
+  console.log(spotifyGradient.multiline(figlet.textSync('SPOTICLEAN', { font: 'Slant', horizontalLayout: 'fitted' })));
 }
