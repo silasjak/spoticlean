@@ -79,9 +79,35 @@ test('history list grows to fill the space left after header/card/footer', () =>
   assert.ok(tall.length <= 40);
 });
 
-test('shows a placeholder when nothing has been decided yet', () => {
-  const frame = buildReviewFrame(baseState({ history: [] })).join('\n');
+test('shows a placeholder when there is no history and no current track either', () => {
+  const frame = buildReviewFrame(baseState({ history: [], item: undefined })).join('\n');
   assert.match(frame, /Noch keine Entscheidungen/);
+});
+
+test('the pending current track gets its own grayed-out row at the end of the list', () => {
+  const item = makeItem({ name: 'Song 4' });
+  const withoutHistory = buildReviewFrame(baseState({ history: [], item })).join('\n');
+  assert.doesNotMatch(withoutHistory, /Noch keine Entscheidungen/);
+  assert.match(withoutHistory, /→ Song 4/);
+
+  const history = makeHistory(3);
+  const frame = buildReviewFrame(baseState({ history, item }));
+  // Card header also says "Song 4" (bolded, no arrow) — match the list row specifically.
+  const line = frame.find((l) => l.includes('→ Song 4'));
+  assert.ok(line, 'expected the current track to appear in the history list');
+  // eslint-disable-next-line no-control-regex -- deliberately matching the ESC control code (SGR "bright-black bg")
+  assert.match(line!, /\x1b\[100m/); // picocolors' pc.bgBlackBright()
+  // eslint-disable-next-line no-control-regex -- must NOT be inverse or yellow, those mean something else
+  assert.doesNotMatch(line!, /\x1b\[7m|\x1b\[43m/);
+});
+
+test('the current-track row disappears from the history list while editing a past entry', () => {
+  const history = makeHistory(3);
+  const item = makeItem({ name: 'Song 4' });
+  const frame = buildReviewFrame(baseState({ history, item, editing: true, editingIndex: 1 })).join('\n');
+  // "Song 4" still shows up in the card header itself (bolded, not "→ ...");
+  // it's the extra grayed-out list row that must be gone while editing.
+  assert.doesNotMatch(frame, /→ Song 4/);
 });
 
 test('omits the "Verlauf" section entirely rather than pushing the footer off-screen', () => {

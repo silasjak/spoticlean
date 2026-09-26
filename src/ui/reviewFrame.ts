@@ -110,34 +110,48 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
 
   let historySection: string[] = [];
   if (hasRoomForHistorySection) {
+    // The not-yet-decided track still pending in the normal flow gets its own
+    // trailing row, right after the decided ones — grayed out, so the list
+    // doesn't make it look like review is one song behind. Suppressed while
+    // editing: `track` there is the past entry being re-decided, not the one
+    // actually still pending, which stays paused off-screen meanwhile.
+    const showCurrentRow = !editing && Boolean(track);
+    const combinedTotal = history.length + (showCurrentRow ? 1 : 0);
+
     // Whichever row needs to stay in view: the browse cursor, or (mutually
     // exclusive with browsing) the entry currently being re-decided.
     const focusIndex = historyCursor ?? editingIndex ?? null;
-    const { start, end } = computeHistoryWindow(history.length, historyCapacity, focusIndex);
-    const visible = history.slice(start, end);
-    const historyLines =
-      visible.length > 0
-        ? visible.map((entry, i) => {
-            const globalIndex = start + i;
-            const symbol = entry.decision === 'removed' ? '✗' : '✓';
-            const isBeingEdited = globalIndex === editingIndex;
-            const label = `${symbol} ${entry.track.name}${isBeingEdited ? ' (wird korrigiert)' : ''}`;
-            const fitted = fitWidth(label, width);
-            // Being-edited and browse-cursor are mutually exclusive (see above), but
-            // check editing first anyway so its more subdued style always wins.
-            if (isBeingEdited) {
-              return boxLine(fitted, width, 1, 'editing');
-            }
-            if (globalIndex === historyCursor) {
-              return boxLine(fitted, width, 1, 'cursor'); // inverted, no color — the highlight *is* the signal
-            }
-            const colorFn = entry.decision === 'removed' ? pc.red : pc.green;
-            return boxLine(colorFn(fitted), width, 1);
-          })
+    const { start, end } = computeHistoryWindow(combinedTotal, historyCapacity, focusIndex);
+
+    const historyLines: string[] = [];
+    for (let globalIndex = start; globalIndex < end; globalIndex++) {
+      if (globalIndex >= history.length) {
+        historyLines.push(boxLine(fitWidth(`→ ${track!.name}`, width), width, 1, 'current'));
+        continue;
+      }
+      const entry = history[globalIndex]!;
+      const symbol = entry.decision === 'removed' ? '✗' : '✓';
+      const isBeingEdited = globalIndex === editingIndex;
+      const label = `${symbol} ${entry.track.name}${isBeingEdited ? ' (wird korrigiert)' : ''}`;
+      const fitted = fitWidth(label, width);
+      // Being-edited and browse-cursor are mutually exclusive (see above), but
+      // check editing first anyway so its more subdued style always wins.
+      if (isBeingEdited) {
+        historyLines.push(boxLine(fitted, width, 1, 'editing'));
+      } else if (globalIndex === historyCursor) {
+        historyLines.push(boxLine(fitted, width, 1, 'cursor')); // inverted, no color — the highlight *is* the signal
+      } else {
+        const colorFn = entry.decision === 'removed' ? pc.red : pc.green;
+        historyLines.push(boxLine(colorFn(fitted), width, 1));
+      }
+    }
+    const lines =
+      historyLines.length > 0
+        ? historyLines
         : historyCapacity > 0
           ? [boxLine(pc.dim('Noch keine Entscheidungen.'), width)]
           : [];
-    historySection = [boxDivider(width, 'Verlauf'), ...historyLines];
+    historySection = [boxDivider(width, 'Verlauf'), ...lines];
   }
 
   return [...header, ...card, ...historySection, ...footer];

@@ -29,7 +29,7 @@ export function boxBottom(width: number): string {
 }
 
 /** Background styles a content line can be rendered in, see `boxLine`. */
-export type LineHighlight = 'none' | 'cursor' | 'editing';
+export type LineHighlight = 'none' | 'cursor' | 'editing' | 'current';
 
 /**
  * A content line, padded to fit inside the border. `content` should
@@ -40,12 +40,21 @@ export type LineHighlight = 'none' | 'cursor' | 'editing';
  * included, borders excluded) without needing its own foreground color:
  * `'cursor'` is full inverse video, for the row the browse cursor sits
  * on; `'editing'` is a dimmer yellow tint, for the row currently being
- * re-decided — visible, but deliberately less loud than the cursor.
+ * re-decided; `'current'` is a plain gray tint, for the not-yet-decided
+ * row still pending in the normal flow — all deliberately less loud than
+ * the cursor's inverse.
  */
 export function boxLine(content: string, width: number, indent = 1, highlight: LineHighlight = 'none'): string {
   const pad = ' '.repeat(Math.max(0, innerWidth(width, indent) - visibleLength(content)));
   const body = ' '.repeat(indent) + content + pad;
-  const styled = highlight === 'cursor' ? pc.inverse(body) : highlight === 'editing' ? pc.bgYellow(pc.black(body)) : body;
+  const styled =
+    highlight === 'cursor'
+      ? pc.inverse(body)
+      : highlight === 'editing'
+        ? pc.bgYellow(pc.black(body))
+        : highlight === 'current'
+          ? pc.bgBlackBright(body)
+          : body;
   return pc.dim('│') + styled + pc.dim('│');
 }
 
