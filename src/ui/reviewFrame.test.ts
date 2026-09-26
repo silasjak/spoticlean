@@ -139,6 +139,17 @@ test('browsing mode swaps the footer hints for navigation hints', () => {
   assert.match(browsing, /springen/);
 });
 
+test('editing mode shows keep/remove/cancel but hides undo and history-browse hints', () => {
+  const frame = buildReviewFrame(baseState({ history: makeHistory(3), historyCursor: null, editing: true })).join(
+    '\n'
+  );
+  assert.match(frame, /keep/);
+  assert.match(frame, /remove/);
+  assert.match(frame, /abbrechen/);
+  assert.doesNotMatch(frame, /undo/);
+  assert.doesNotMatch(frame, /springen/);
+});
+
 test('the highlighted history row is rendered in inverse video', () => {
   const history = makeHistory(3);
   const frame = buildReviewFrame(baseState({ history, historyCursor: 1 }));

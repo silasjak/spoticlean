@@ -22,6 +22,8 @@ export type ReviewFrameState = {
   history: HistoryEntry[];
   /** Index into `history` that's highlighted for jump-back, or null when not browsing. */
   historyCursor: number | null;
+  /** True while re-deciding one specific past track opened from the history browser. */
+  editing?: boolean;
   status?: StatusLine;
   width: number;
   height: number;
@@ -56,6 +58,7 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
     isPaused,
     history,
     historyCursor,
+    editing = false,
     status,
     sourceName,
     trackNumber,
@@ -63,6 +66,7 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
   } = state;
   const track = item?.track;
   const browsing = historyCursor !== null;
+  const hintMode = editing ? 'edit' : browsing ? 'browse' : 'review';
 
   const title = `spoticlean · ${sourceName} · Track ${trackNumber}/${totalTracks}`;
   const header = [boxTop(width, fitWidth(title, width, 3))];
@@ -90,7 +94,7 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
   card.push(boxLine(status ? (status.color ?? identity)(fitWidth(status.text, width)) : '', width));
   card.push(boxBlank(width));
 
-  const footerHintLines = buildKeyHintLines(hasDevice, innerWidth(width), browsing).map((line) => boxLine(line, width));
+  const footerHintLines = buildKeyHintLines(hasDevice, innerWidth(width), hintMode).map((line) => boxLine(line, width));
   const footer = [boxDivider(width), ...footerHintLines, boxBottom(width)];
 
   // Header, card and footer (the sticky key legend) always take priority —

@@ -107,11 +107,17 @@ weitermachen.
 Der "Verlauf"-Bereich zeigt alle bereits entschiedenen Songs. Mit `↑`
 markierst du den letzten Eintrag; mit `↑`/`↓` bewegst du die Markierung
 weiter, auch über den sichtbaren Ausschnitt hinaus (er scrollt mit).
-`Enter` auf einem markierten Song springt dorthin zurück, spielt ihn
-erneut ab und du entscheidest frisch (Keep/Remove) — alles danach wird
-dabei automatisch rückgängig gemacht (wie mehrfaches `u`, nur mit
-Sichtkontrolle statt Blindflug); danach geht es normal weiter. `Esc`
-bricht das Blättern ohne Änderung ab.
+`Enter` auf einem markierten Song öffnet ihn erneut zum Reinhören und
+Neu-Entscheiden (Keep/Remove) — **nur dieser eine Song ändert sich**,
+alle anderen Entscheidungen bleiben unangetastet. Direkt danach geht
+es exakt dort weiter, wo du vorher warst, kein erneutes Durch-Entscheiden
+nötig. `Esc` bricht sowohl das Blättern als auch eine begonnene
+Neu-Entscheidung ohne Änderung ab.
+
+Willst du stattdessen mehrere Entscheidungen **in Folge** rückgängig
+machen (nicht nur eine einzelne, beliebig weit zurückliegende), ist
+dafür weiterhin mehrfaches `u` gedacht — das räumt der Reihe nach die
+letzten Entscheidungen ab, unabhängig vom Verlauf-Browser.
 
 ## Konfiguration
 

@@ -114,6 +114,9 @@ export async function runReviewSession(
   // Index into `history` that's highlighted while browsing with ↑/↓, or
   // null in the normal (not browsing) state.
   let historyCursor: number | null = null;
+  // True only for the duration of re-deciding one specific past track
+  // opened from the history browser (see editHistoryEntry()).
+  let isEditing = false;
 
   function setStatus(text: string, color?: (t: string) => string): void {
     status = { text, color };
@@ -132,6 +135,7 @@ export async function runReviewSession(
         isPaused: view.isPaused,
         history,
         historyCursor,
+        editing: isEditing,
         status,
         width: terminalWidth(),
         height: terminalHeight(),
@@ -168,9 +172,81 @@ export async function runReviewSession(
   enterAltScreen();
   process.stdout.on('resize', onResize);
 
+  // Starts (or restarts) chorus-first playback for `track`, currently shown
+  // at view.index, and renders. Shared between entering a track normally and
+  // resuming the original track after a history-browser detour.
+  async function startPlayback(track: SpotifyTrack): Promise<void> {
+    view.positionMs = estimateChorusPositionMs(track.duration_ms);
+    view.isPaused = false;
+    render();
+
+    if (hasDevice && !track.is_local) {
+      // Awaited (not fire-and-forget): a pause/seek pressed while this is
+      // still in flight would race it and produce spurious errors.
+      await safePlayback(() => playTrackAt(track.uri, view.positionMs, deviceId), onPlaybackError);
+      render();
+    }
+  }
+
+  // Keys that make sense any time a track is on screen, regardless of
+  // whether it's being reviewed forward or re-decided via the history
+  // browser: pause/resume, seek, back-to-chorus, open in Spotify. Returns
+  // true if it handled the key.
+  async function handlePlaybackOrOpenKey(normalized: string | undefined, track: SpotifyTrack): Promise<boolean> {
+    switch (normalized) {
+      case 'o':
+        openInSpotify(track);
+        setStatus(`In Spotify geöffnet: ${track.name}`, pc.dim);
+        return true;
+      case ' ':
+        if (hasDevice) {
+          const ok = view.isPaused
+            ? await safePlayback(() => resumePlayback(deviceId), onPlaybackError)
+            : await safePlayback(() => pausePlayback(deviceId), onPlaybackError);
+          if (ok) view.isPaused = !view.isPaused;
+          render();
+        }
+        return true;
+      case '.':
+      case 'l':
+        if (hasDevice) {
+          view.positionMs += SEEK_STEP_MS;
+          await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
+          render();
+        }
+        return true;
+      case ',':
+      case 'h':
+        if (hasDevice) {
+          view.positionMs = Math.max(0, view.positionMs - SEEK_STEP_MS);
+          await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
+          render();
+        }
+        return true;
+      case 'b':
+        if (hasDevice) {
+          view.positionMs = estimateChorusPositionMs(track.duration_ms);
+          await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
+          render();
+        }
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  function normalizeKey(key: Awaited<ReturnType<typeof readKey>>): string | undefined {
+    return key.name === 'return'
+      ? 'enter'
+      : key.name === 'backspace' || key.name === 'delete' || key.char === '\u007f'
+        ? 'backspace'
+        : key.name === 'up' || key.name === 'down' || key.name === 'escape'
+          ? key.name
+          : key.char?.toLowerCase();
+  }
+
   // Undoes exactly the most recent decision (pops `history`, restores via
-  // the API if it had been removed). Shared by the plain `u` key and by
-  // jumpBackTo()'s multi-step rewind.
+  // the API if it had been removed). Used by the plain `u` key.
   async function undoOne(): Promise<void> {
     const last = history.pop();
     if (!last) return;
@@ -190,13 +266,77 @@ export async function runReviewSession(
     }
   }
 
-  // Rewinds every decision back to (and including) `targetIndex`, same as
-  // pressing `u` repeatedly — used to confirm a jump picked in the history
-  // browser. Sequential (not parallel), same as a human mashing undo.
-  async function jumpBackTo(targetIndex: number): Promise<void> {
-    while (history.length > 0 && history[history.length - 1]!.index >= targetIndex) {
-      await undoOne();
+  // Re-decides exactly one past track picked in the history browser, then
+  // returns to wherever the session actually was — everything reviewed
+  // since stays as it was. Only this track's own decision changes (and only
+  // if it actually changed); nothing after it gets rewound or re-reviewed.
+  // Returns true if the user asked to quit while doing this.
+  async function editHistoryEntry(targetIndex: number, track: SpotifyTrack): Promise<boolean> {
+    const originalIndex = view.index;
+    const originalPositionMs = view.positionMs;
+    const originalIsPaused = view.isPaused;
+
+    view.index = targetIndex;
+    isEditing = true;
+    await startPlayback(track);
+
+    let action: Decision | 'quit' | 'cancel' | undefined;
+    while (!action) {
+      const key = await readKey();
+      if (key.ctrl && key.name === 'c') {
+        action = 'quit';
+        break;
+      }
+      const normalized = normalizeKey(key);
+      switch (normalized) {
+        case 'enter':
+        case 'k':
+          action = 'kept';
+          break;
+        case 'r':
+        case 'backspace':
+          action = 'removed';
+          break;
+        case 'q':
+          action = 'quit';
+          break;
+        case 'escape':
+          action = 'cancel';
+          break;
+        default:
+          await handlePlaybackOrOpenKey(normalized, track);
+          break;
+      }
     }
+
+    if (action !== 'quit' && action !== 'cancel' && action !== decisions.get(targetIndex)) {
+      if (action === 'removed') {
+        setStatus(`Entferne: ${track.name}…`, pc.dim);
+        try {
+          await removeTrack(source, track);
+          setStatus(`✗ Entfernt: ${track.name}`, pc.red);
+        } catch (error) {
+          setStatus(`Entfernen fehlgeschlagen (${track.name}): ${(error as Error).message}`, pc.red);
+        }
+      } else {
+        setStatus(`Wiederherstellen: ${track.name}…`, pc.dim);
+        try {
+          await restoreTrack(source, track);
+          setStatus(`↺ Wiederhergestellt: ${track.name}`, pc.dim);
+        } catch (error) {
+          setStatus(`Wiederherstellen fehlgeschlagen: ${(error as Error).message}`, pc.red);
+        }
+      }
+      decisions.set(targetIndex, action);
+      const entry = history.find((h) => h.index === targetIndex);
+      if (entry) entry.decision = action;
+    }
+
+    isEditing = false;
+    view.index = originalIndex;
+    view.positionMs = originalPositionMs;
+    view.isPaused = originalIsPaused;
+    return action === 'quit';
   }
 
   // Reviews the track currently at view.index: shows it, plays it, waits for
@@ -204,17 +344,7 @@ export async function runReviewSession(
   async function reviewOneTrack(): Promise<boolean> {
     const item = tracks[view.index]!;
     const track = item.track;
-
-    view.positionMs = estimateChorusPositionMs(track.duration_ms);
-    view.isPaused = false;
-    render();
-
-    if (hasDevice && !track.is_local) {
-      // Awaited (not fire-and-forget): a pause/seek pressed while this is
-      // still in flight would race it and produce spurious errors.
-      await safePlayback(() => playTrackAt(track.uri, view.positionMs, deviceId), onPlaybackError);
-      render();
-    }
+    await startPlayback(track);
 
     let action: Decision | 'undo' | 'quit' | undefined;
 
@@ -226,14 +356,7 @@ export async function runReviewSession(
         break;
       }
 
-      const normalized =
-        key.name === 'return'
-          ? 'enter'
-          : key.name === 'backspace' || key.name === 'delete' || key.char === '\u007f'
-            ? 'backspace'
-            : key.name === 'up' || key.name === 'down' || key.name === 'escape'
-              ? key.name
-              : key.char?.toLowerCase();
+      const normalized = normalizeKey(key);
 
       // While a history entry is highlighted, ↑/↓/Enter/Esc drive the
       // browser and everything else (k, r, space, ...) is ignored — they'd
@@ -253,10 +376,15 @@ export async function runReviewSession(
             render();
             break;
           case 'enter': {
-            const target = history[historyCursor]!.index;
+            const target = history[historyCursor]!;
             historyCursor = null;
-            await jumpBackTo(target);
-            return false; // re-enter reviewOneTrack fresh for the now-current index
+            const quitRequested = await editHistoryEntry(target.index, target.track);
+            if (quitRequested) {
+              quitEarly = true;
+              return true;
+            }
+            await startPlayback(track); // resume the original track after the detour
+            break;
           }
           default:
             break;
@@ -285,43 +413,8 @@ export async function runReviewSession(
             render();
           }
           break;
-        case 'o':
-          openInSpotify(track);
-          setStatus(`In Spotify geöffnet: ${track.name}`, pc.dim);
-          break;
-        case ' ':
-          if (hasDevice) {
-            const ok = view.isPaused
-              ? await safePlayback(() => resumePlayback(deviceId), onPlaybackError)
-              : await safePlayback(() => pausePlayback(deviceId), onPlaybackError);
-            if (ok) view.isPaused = !view.isPaused;
-            render();
-          }
-          break;
-        case '.':
-        case 'l':
-          if (hasDevice) {
-            view.positionMs += SEEK_STEP_MS;
-            await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
-            render();
-          }
-          break;
-        case ',':
-        case 'h':
-          if (hasDevice) {
-            view.positionMs = Math.max(0, view.positionMs - SEEK_STEP_MS);
-            await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
-            render();
-          }
-          break;
-        case 'b':
-          if (hasDevice) {
-            view.positionMs = estimateChorusPositionMs(track.duration_ms);
-            await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
-            render();
-          }
-          break;
         default:
+          await handlePlaybackOrOpenKey(normalized, track);
           break;
       }
     }
