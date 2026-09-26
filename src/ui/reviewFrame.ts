@@ -123,11 +123,16 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
             const isBeingEdited = globalIndex === editingIndex;
             const label = `${symbol} ${entry.track.name}${isBeingEdited ? ' (wird korrigiert)' : ''}`;
             const fitted = fitWidth(label, width);
-            if (globalIndex === historyCursor || isBeingEdited) {
-              return boxLine(fitted, width, 1, true); // inverted, no color — the highlight *is* the signal
+            // Being-edited and browse-cursor are mutually exclusive (see above), but
+            // check editing first anyway so its more subdued style always wins.
+            if (isBeingEdited) {
+              return boxLine(fitted, width, 1, 'editing');
+            }
+            if (globalIndex === historyCursor) {
+              return boxLine(fitted, width, 1, 'cursor'); // inverted, no color — the highlight *is* the signal
             }
             const colorFn = entry.decision === 'removed' ? pc.red : pc.green;
-            return boxLine(colorFn(fitted), width, 1, false);
+            return boxLine(colorFn(fitted), width, 1);
           })
         : historyCapacity > 0
           ? [boxLine(pc.dim('Noch keine Entscheidungen.'), width)]

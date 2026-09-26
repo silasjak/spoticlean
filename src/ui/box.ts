@@ -28,19 +28,25 @@ export function boxBottom(width: number): string {
   return pc.dim('└' + horizontal(width - 2) + '┘');
 }
 
+/** Background styles a content line can be rendered in, see `boxLine`. */
+export type LineHighlight = 'none' | 'cursor' | 'editing';
+
 /**
  * A content line, padded to fit inside the border. `content` should
  * already fit within `innerWidth(width, indent)` — truncate the *plain*
  * text with `fitWidth()` before applying color, since slicing already-
  * colored text can cut an escape sequence in half and bleed color onto
- * everything after it. With `invert`, the padded content (padding
- * included, borders excluded) is shown in inverse video — used to
- * highlight a selected row without needing its own foreground color.
+ * everything after it. `highlight` shades the padded content (padding
+ * included, borders excluded) without needing its own foreground color:
+ * `'cursor'` is full inverse video, for the row the browse cursor sits
+ * on; `'editing'` is a dimmer yellow tint, for the row currently being
+ * re-decided — visible, but deliberately less loud than the cursor.
  */
-export function boxLine(content: string, width: number, indent = 1, invert = false): string {
+export function boxLine(content: string, width: number, indent = 1, highlight: LineHighlight = 'none'): string {
   const pad = ' '.repeat(Math.max(0, innerWidth(width, indent) - visibleLength(content)));
   const body = ' '.repeat(indent) + content + pad;
-  return pc.dim('│') + (invert ? pc.inverse(body) : body) + pc.dim('│');
+  const styled = highlight === 'cursor' ? pc.inverse(body) : highlight === 'editing' ? pc.bgYellow(pc.black(body)) : body;
+  return pc.dim('│') + styled + pc.dim('│');
 }
 
 export function innerWidth(width: number, indent = 1): number {

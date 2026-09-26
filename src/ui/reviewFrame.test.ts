@@ -157,13 +157,21 @@ test('the track being edited is marked with a note in the history list, not the 
   assert.doesNotMatch(frame, /Korrektur —/); // no more header/card banner
 });
 
-test('the edited row is rendered in inverse video, like a browse-cursor row', () => {
+test('the edited row gets a yellow tint, distinct from the browse-cursor row', () => {
   const history = makeHistory(3);
-  const frame = buildReviewFrame(baseState({ history, editing: true, editingIndex: 1 }));
-  const line = frame.find((l) => l.includes('Song 1'));
-  assert.ok(line);
+  const editedFrame = buildReviewFrame(baseState({ history, editing: true, editingIndex: 1 }));
+  const editedLine = editedFrame.find((l) => l.includes('Song 1'));
+  assert.ok(editedLine);
+  // eslint-disable-next-line no-control-regex -- deliberately matching the ESC control code (SGR "yellow bg")
+  assert.match(editedLine!, /\x1b\[43m/); // picocolors' pc.bgYellow()
+  // eslint-disable-next-line no-control-regex -- must NOT be full inverse video, that's the cursor's style
+  assert.doesNotMatch(editedLine!, /\x1b\[7m/);
+
+  const cursorFrame = buildReviewFrame(baseState({ history, historyCursor: 1 }));
+  const cursorLine = cursorFrame.find((l) => l.includes('Song 1'));
+  assert.ok(cursorLine);
   // eslint-disable-next-line no-control-regex -- deliberately matching the ESC control character (SGR "inverse")
-  assert.match(line!, /\x1b\[7m/); // picocolors' pc.inverse()
+  assert.match(cursorLine!, /\x1b\[7m/); // picocolors' pc.inverse()
 });
 
 test('scrolling keeps the edited row visible even deep in a long history', () => {
