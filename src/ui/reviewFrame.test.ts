@@ -163,6 +163,28 @@ test('the status message appears in the frame', () => {
   assert.match(frame, /Ganz besondere Statuszeile/);
 });
 
+test('shows a playback progress bar in the status row when there is a device and no status message', () => {
+  const frame = buildReviewFrame(baseState({ positionMs: 90_000 })).join('\n');
+  // makeItem()'s track is 180_000ms — 90_000ms in is exactly halfway, and
+  // formatDuration renders it "1:30" of "3:00".
+  assert.match(frame, /1:30 █+░+ 3:00/);
+});
+
+test('a status message replaces the progress bar rather than both showing', () => {
+  const frame = buildReviewFrame(baseState({ positionMs: 90_000, status: { text: 'Entfernt: X' } })).join('\n');
+  assert.doesNotMatch(frame, /█/);
+  assert.match(frame, /Entfernt: X/);
+});
+
+test('hides the progress bar without a device or for a local file', () => {
+  const withoutDevice = buildReviewFrame(baseState({ hasDevice: false })).join('\n');
+  assert.doesNotMatch(withoutDevice, /█|░/);
+
+  const localItem = makeItem({ is_local: true });
+  const local = buildReviewFrame(baseState({ item: localItem })).join('\n');
+  assert.doesNotMatch(local, /█|░/);
+});
+
 test('browsing mode swaps the footer hints for navigation hints', () => {
   const normal = buildReviewFrame(baseState({ history: makeHistory(3), historyCursor: null })).join('\n');
   const browsing = buildReviewFrame(baseState({ history: makeHistory(3), historyCursor: 1 })).join('\n');

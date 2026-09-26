@@ -34,6 +34,16 @@ export type ReviewFrameState = {
 
 const identity = (text: string) => text;
 
+/** A "0:35 ███████░░░░░░░░░░░░ 3:20" bar, sized to fill exactly `width` columns. */
+function buildProgressBar(positionMs: number, durationMs: number, width: number): string {
+  const elapsed = formatDuration(positionMs);
+  const total = formatDuration(durationMs);
+  const barWidth = Math.max(0, width - elapsed.length - total.length - 2);
+  const ratio = durationMs > 0 ? Math.min(1, Math.max(0, positionMs / durationMs)) : 0;
+  const filled = Math.round(ratio * barWidth);
+  return `${elapsed} ${'█'.repeat(filled)}${'░'.repeat(barWidth - filled)} ${total}`;
+}
+
 /** Keeps `cursor` inside the visible window, centering on it once the list no longer fits. */
 function computeHistoryWindow(total: number, capacity: number, cursor: number | null): { start: number; end: number } {
   if (capacity <= 0 || total === 0) return { start: 0, end: 0 };
@@ -101,9 +111,15 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
       );
     }
   }
-  // Always exactly one status row (blank when there's nothing to say) so the
-  // card doesn't change height depending on whether a message is showing.
-  card.push(boxLine(status ? (status.color ?? identity)(fitWidth(status.text, width)) : '', width));
+  // Always exactly one status/progress row (blank when neither applies) so
+  // the card doesn't change height depending on what's showing. A status
+  // message always wins — it's meant to be noticed, and a wrong/failed
+  // action is more important right now than where playback is — so the bar
+  // is simply not visible for as long as one is up; it comes back on its own
+  // once the message is replaced or cleared (see startPlayback()).
+  const canShowProgress = Boolean(track) && hasDevice && !track!.is_local;
+  const progressBar = canShowProgress ? pc.dim(buildProgressBar(positionMs, track!.duration_ms, innerWidth(width))) : '';
+  card.push(boxLine(status ? (status.color ?? identity)(fitWidth(status.text, width)) : progressBar, width));
   card.push(boxBlank(width));
 
   const footerHintLines = buildKeyHintLines(hasDevice, innerWidth(width), hintMode).map((line) => boxLine(line, width));
