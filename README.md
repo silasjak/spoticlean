@@ -109,10 +109,11 @@ markierst du den letzten Eintrag; mit `↑`/`↓` bewegst du die Markierung
 weiter, auch über den sichtbaren Ausschnitt hinaus (er scrollt mit).
 `Enter` auf einem markierten Song öffnet ihn erneut zum Reinhören und
 Neu-Entscheiden (Keep/Remove) — **nur dieser eine Song ändert sich**,
-alle anderen Entscheidungen bleiben unangetastet. Direkt danach geht
-es exakt dort weiter, wo du vorher warst, kein erneutes Durch-Entscheiden
-nötig. `Esc` bricht sowohl das Blättern als auch eine begonnene
-Neu-Entscheidung ohne Änderung ab.
+alle anderen Entscheidungen bleiben unangetastet. In der Verlauf-Liste
+bleibt er dabei hervorgehoben, mit dem Zusatz "(wird korrigiert)".
+Direkt danach geht es exakt dort weiter, wo du vorher warst, kein
+erneutes Durch-Entscheiden nötig. `Esc` bricht sowohl das Blättern als
+auch eine begonnene Neu-Entscheidung ohne Änderung ab.
 
 Willst du stattdessen mehrere Entscheidungen **in Folge** rückgängig
 machen (nicht nur eine einzelne, beliebig weit zurückliegende), ist

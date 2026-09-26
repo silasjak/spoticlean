@@ -24,8 +24,8 @@ export type ReviewFrameState = {
   historyCursor: number | null;
   /** True while re-deciding one specific past track opened from the history browser. */
   editing?: boolean;
-  /** That track's decision before this edit — shown as context while editing. */
-  editingPreviousDecision?: Decision;
+  /** That track's position in `history` — highlighted there (with a note) while editing. */
+  editingIndex?: number;
   status?: StatusLine;
   width: number;
   height: number;
@@ -61,7 +61,7 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
     history,
     historyCursor,
     editing = false,
-    editingPreviousDecision,
+    editingIndex,
     status,
     sourceName,
     trackNumber,
@@ -76,11 +76,6 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
 
   const card: string[] = [boxBlank(width)];
   if (track && item) {
-    if (editing) {
-      const prevLabel =
-        editingPreviousDecision === 'removed' ? '✗ entfernt' : editingPreviousDecision === 'kept' ? '✓ behalten' : '?';
-      card.push(boxLine(pc.yellow(fitWidth(`↺ Korrektur — bisher: ${prevLabel}`, width)), width));
-    }
     card.push(boxLine(pc.bold(fitWidth(track.name, width)), width));
     card.push(boxLine(pc.dim(fitWidth(`${formatArtists(track)} · ${track.album.name}`, width)), width));
     card.push(
@@ -115,15 +110,20 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
 
   let historySection: string[] = [];
   if (hasRoomForHistorySection) {
-    const { start, end } = computeHistoryWindow(history.length, historyCapacity, historyCursor);
+    // Whichever row needs to stay in view: the browse cursor, or (mutually
+    // exclusive with browsing) the entry currently being re-decided.
+    const focusIndex = historyCursor ?? editingIndex ?? null;
+    const { start, end } = computeHistoryWindow(history.length, historyCapacity, focusIndex);
     const visible = history.slice(start, end);
     const historyLines =
       visible.length > 0
         ? visible.map((entry, i) => {
             const globalIndex = start + i;
             const symbol = entry.decision === 'removed' ? '✗' : '✓';
-            const fitted = fitWidth(`${symbol} ${entry.track.name}`, width);
-            if (globalIndex === historyCursor) {
+            const isBeingEdited = globalIndex === editingIndex;
+            const label = `${symbol} ${entry.track.name}${isBeingEdited ? ' (wird korrigiert)' : ''}`;
+            const fitted = fitWidth(label, width);
+            if (globalIndex === historyCursor || isBeingEdited) {
               return boxLine(fitted, width, 1, true); // inverted, no color — the highlight *is* the signal
             }
             const colorFn = entry.decision === 'removed' ? pc.red : pc.green;

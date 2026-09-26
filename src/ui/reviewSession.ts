@@ -118,7 +118,7 @@ export async function runReviewSession(
   // opened from the history browser (see editHistoryEntry()); the decision
   // it had before this edit, shown alongside for context.
   let isEditing = false;
-  let editingPreviousDecision: Decision | undefined;
+  let editingIndex: number | undefined;
 
   function setStatus(text: string, color?: (t: string) => string): void {
     status = { text, color };
@@ -138,7 +138,7 @@ export async function runReviewSession(
         history,
         historyCursor,
         editing: isEditing,
-        editingPreviousDecision,
+        editingIndex,
         status,
         width: terminalWidth(),
         height: terminalHeight(),
@@ -283,7 +283,7 @@ export async function runReviewSession(
 
     view.index = targetIndex;
     isEditing = true;
-    editingPreviousDecision = previousDecision;
+    editingIndex = targetIndex;
     await startPlayback(track);
 
     let action: Decision | 'quit' | 'cancel' | undefined;
@@ -339,7 +339,7 @@ export async function runReviewSession(
     }
 
     isEditing = false;
-    editingPreviousDecision = undefined;
+    editingIndex = undefined;
     view.index = originalIndex;
     view.positionMs = originalPositionMs;
     view.isPaused = originalIsPaused;

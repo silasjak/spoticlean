@@ -149,22 +149,27 @@ test('editing mode shows keep/remove/cancel but hides undo and history-browse hi
   assert.doesNotMatch(frame, /undo/);
 });
 
-test('editing shows a highlighted banner with the track\'s previous decision', () => {
-  const kept = buildReviewFrame(baseState({ editing: true, editingPreviousDecision: 'kept' })).join('\n');
-  const removed = buildReviewFrame(baseState({ editing: true, editingPreviousDecision: 'removed' })).join('\n');
-  const notEditing = buildReviewFrame(baseState({ editing: false })).join('\n');
-  assert.match(kept, /Korrektur/);
-  assert.match(kept, /behalten/);
-  assert.match(removed, /entfernt/);
-  assert.doesNotMatch(notEditing, /Korrektur/);
+test('the track being edited is marked with a note in the history list, not the header', () => {
+  const history = makeHistory(3);
+  const frame = buildReviewFrame(baseState({ history, editing: true, editingIndex: 1 })).join('\n');
+  assert.match(frame, /Song 1 \(wird korrigiert\)/);
+  assert.doesNotMatch(frame, /Song 0 \(wird korrigiert\)/);
+  assert.doesNotMatch(frame, /Korrektur —/); // no more header/card banner
 });
 
-test('the editing banner is color-highlighted (not the default dim/bold styling)', () => {
-  const frame = buildReviewFrame(baseState({ editing: true, editingPreviousDecision: 'kept' }));
-  const line = frame.find((l) => l.includes('Korrektur'));
+test('the edited row is rendered in inverse video, like a browse-cursor row', () => {
+  const history = makeHistory(3);
+  const frame = buildReviewFrame(baseState({ history, editing: true, editingIndex: 1 }));
+  const line = frame.find((l) => l.includes('Song 1'));
   assert.ok(line);
-  // eslint-disable-next-line no-control-regex -- deliberately matching the ESC control character (SGR "yellow")
-  assert.match(line!, /\x1b\[33m/); // picocolors' pc.yellow()
+  // eslint-disable-next-line no-control-regex -- deliberately matching the ESC control character (SGR "inverse")
+  assert.match(line!, /\x1b\[7m/); // picocolors' pc.inverse()
+});
+
+test('scrolling keeps the edited row visible even deep in a long history', () => {
+  const history = makeHistory(50);
+  const frame = buildReviewFrame(baseState({ height: 15, history, editing: true, editingIndex: 3 })).join('\n');
+  assert.match(frame, /Song 3 \(wird korrigiert\)/);
 });
 
 test('the highlighted history row is rendered in inverse video', () => {
