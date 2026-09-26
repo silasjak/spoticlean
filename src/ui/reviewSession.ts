@@ -115,8 +115,10 @@ export async function runReviewSession(
   // null in the normal (not browsing) state.
   let historyCursor: number | null = null;
   // True only for the duration of re-deciding one specific past track
-  // opened from the history browser (see editHistoryEntry()).
+  // opened from the history browser (see editHistoryEntry()); the decision
+  // it had before this edit, shown alongside for context.
   let isEditing = false;
+  let editingPreviousDecision: Decision | undefined;
 
   function setStatus(text: string, color?: (t: string) => string): void {
     status = { text, color };
@@ -136,6 +138,7 @@ export async function runReviewSession(
         history,
         historyCursor,
         editing: isEditing,
+        editingPreviousDecision,
         status,
         width: terminalWidth(),
         height: terminalHeight(),
@@ -276,8 +279,11 @@ export async function runReviewSession(
     const originalPositionMs = view.positionMs;
     const originalIsPaused = view.isPaused;
 
+    const previousDecision = decisions.get(targetIndex);
+
     view.index = targetIndex;
     isEditing = true;
+    editingPreviousDecision = previousDecision;
     await startPlayback(track);
 
     let action: Decision | 'quit' | 'cancel' | undefined;
@@ -309,7 +315,7 @@ export async function runReviewSession(
       }
     }
 
-    if (action !== 'quit' && action !== 'cancel' && action !== decisions.get(targetIndex)) {
+    if (action !== 'quit' && action !== 'cancel' && action !== previousDecision) {
       if (action === 'removed') {
         setStatus(`Entferne: ${track.name}…`, pc.dim);
         try {
@@ -333,6 +339,7 @@ export async function runReviewSession(
     }
 
     isEditing = false;
+    editingPreviousDecision = undefined;
     view.index = originalIndex;
     view.positionMs = originalPositionMs;
     view.isPaused = originalIsPaused;

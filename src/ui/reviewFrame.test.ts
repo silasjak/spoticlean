@@ -136,7 +136,7 @@ test('browsing mode swaps the footer hints for navigation hints', () => {
   const browsing = buildReviewFrame(baseState({ history: makeHistory(3), historyCursor: 1 })).join('\n');
   assert.match(normal, /keep/);
   assert.doesNotMatch(browsing, /keep/);
-  assert.match(browsing, /springen/);
+  assert.match(browsing, /korrigieren/);
 });
 
 test('editing mode shows keep/remove/cancel but hides undo and history-browse hints', () => {
@@ -147,7 +147,24 @@ test('editing mode shows keep/remove/cancel but hides undo and history-browse hi
   assert.match(frame, /remove/);
   assert.match(frame, /abbrechen/);
   assert.doesNotMatch(frame, /undo/);
-  assert.doesNotMatch(frame, /springen/);
+});
+
+test('editing shows a highlighted banner with the track\'s previous decision', () => {
+  const kept = buildReviewFrame(baseState({ editing: true, editingPreviousDecision: 'kept' })).join('\n');
+  const removed = buildReviewFrame(baseState({ editing: true, editingPreviousDecision: 'removed' })).join('\n');
+  const notEditing = buildReviewFrame(baseState({ editing: false })).join('\n');
+  assert.match(kept, /Korrektur/);
+  assert.match(kept, /behalten/);
+  assert.match(removed, /entfernt/);
+  assert.doesNotMatch(notEditing, /Korrektur/);
+});
+
+test('the editing banner is color-highlighted (not the default dim/bold styling)', () => {
+  const frame = buildReviewFrame(baseState({ editing: true, editingPreviousDecision: 'kept' }));
+  const line = frame.find((l) => l.includes('Korrektur'));
+  assert.ok(line);
+  // eslint-disable-next-line no-control-regex -- deliberately matching the ESC control character (SGR "yellow")
+  assert.match(line!, /\x1b\[33m/); // picocolors' pc.yellow()
 });
 
 test('the highlighted history row is rendered in inverse video', () => {

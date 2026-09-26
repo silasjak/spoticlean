@@ -20,7 +20,7 @@ const REVIEW_HINTS: KeyHint[] = [
 /** Shown instead of REVIEW_HINTS while a history entry is highlighted (browsing mode, not yet committed to reopening it). */
 const BROWSE_HINTS: KeyHint[] = [
   { key: '↑/↓', desc: 'auswählen' },
-  { key: '⏎', desc: 'dorthin springen & neu entscheiden' },
+  { key: '⏎', desc: 'öffnen & korrigieren' },
   { key: 'Esc', desc: 'abbrechen' },
 ];
 
