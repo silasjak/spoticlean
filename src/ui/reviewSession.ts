@@ -273,8 +273,16 @@ export async function runReviewSession(
   // returns to wherever the session actually was — everything reviewed
   // since stays as it was. Only this track's own decision changes (and only
   // if it actually changed); nothing after it gets rewound or re-reviewed.
+  // `historyPosition` is this entry's position in the `history` array —
+  // the same space `historyCursor` and the list's rendering use, which
+  // only matches the track's absolute `.index` when the session didn't
+  // resume partway through (that mismatch was exactly the bug: the edited
+  // row failed to highlight at all after resuming, since `editingIndex` was
+  // being compared against the array-position space while holding an
+  // absolute index).
   // Returns true if the user asked to quit while doing this.
-  async function editHistoryEntry(targetIndex: number, track: SpotifyTrack): Promise<boolean> {
+  async function editHistoryEntry(historyPosition: number): Promise<boolean> {
+    const { index: targetIndex, track } = history[historyPosition]!;
     const originalIndex = view.index;
     const originalPositionMs = view.positionMs;
     const originalIsPaused = view.isPaused;
@@ -283,7 +291,7 @@ export async function runReviewSession(
 
     view.index = targetIndex;
     isEditing = true;
-    editingIndex = targetIndex;
+    editingIndex = historyPosition;
     await startPlayback(track);
 
     let action: Decision | 'quit' | 'cancel' | undefined;
@@ -383,9 +391,9 @@ export async function runReviewSession(
             render();
             break;
           case 'enter': {
-            const target = history[historyCursor]!;
+            const position = historyCursor;
             historyCursor = null;
-            const quitRequested = await editHistoryEntry(target.index, target.track);
+            const quitRequested = await editHistoryEntry(position);
             if (quitRequested) {
               quitEarly = true;
               return true;

@@ -20,11 +20,11 @@ export type ReviewFrameState = {
   isPaused: boolean;
   /** Every already-decided track, in review order (index 0 = first reviewed). */
   history: HistoryEntry[];
-  /** Index into `history` that's highlighted for jump-back, or null when not browsing. */
+  /** Index (array position, *not* the track's absolute review index) into `history` that's highlighted for jump-back, or null when not browsing. */
   historyCursor: number | null;
   /** True while re-deciding one specific past track opened from the history browser. */
   editing?: boolean;
-  /** That track's position in `history` — highlighted there (with a note) while editing. */
+  /** Same array-position space as `historyCursor` — that entry is highlighted (with a note) while editing. */
   editingIndex?: number;
   status?: StatusLine;
   width: number;
