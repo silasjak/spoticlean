@@ -11,5 +11,8 @@ figlet.parseFont('Slant', slant);
 const spotifyGradient = gradient(['#1DB954', '#1ed760', '#1DB954']);
 
 export function printBanner(): void {
-  console.log(spotifyGradient.multiline(figlet.textSync('SPOTICLEAN', { font: 'Slant' })));
+  // 'full' turns off the font's default letter-smushing (which otherwise
+  // packs adjacent letters right up against each other) for some breathing
+  // room between characters instead.
+  console.log(spotifyGradient.multiline(figlet.textSync('SPOTICLEAN', { font: 'Slant', horizontalLayout: 'full' })));
 }

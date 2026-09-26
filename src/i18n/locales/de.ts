@@ -78,6 +78,7 @@ const de = {
     selectQuestion: 'Auf welchem Gerät soll abgespielt werden?',
   },
   source: {
+    likedSongsName: 'Lieblingssongs',
     loading: 'Lade deine Playlisten…',
     loaded_one: '{{count}} eigene Playlist gefunden.',
     loaded_other: '{{count}} eigene Playlisten gefunden.',

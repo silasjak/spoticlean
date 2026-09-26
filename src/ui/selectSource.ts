@@ -26,8 +26,8 @@ export async function selectSource(): Promise<{ source: TrackSource; total: numb
 
   const options: { value: { source: TrackSource; total: number }; label: string; hint: string }[] = [
     {
-      value: { source: { kind: 'liked', name: 'Liked Songs' }, total: likedTotal },
-      label: `💚 Liked Songs`,
+      value: { source: { kind: 'liked', name: t('source.likedSongsName') }, total: likedTotal },
+      label: `💚 ${t('source.likedSongsName')}`,
       hint: t('source.songsCount', { count: likedTotal }),
     },
     ...playlists.map((playlist) => {

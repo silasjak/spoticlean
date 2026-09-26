@@ -77,6 +77,7 @@ const en: Translations = {
     selectQuestion: 'Which device should playback use?',
   },
   source: {
+    likedSongsName: 'Liked Songs',
     loading: 'Loading your playlists…',
     loaded_one: '{{count}} playlist you own found.',
     loaded_other: '{{count}} playlists you own found.',
