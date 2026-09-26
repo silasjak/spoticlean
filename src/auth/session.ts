@@ -4,6 +4,7 @@ import open from 'open';
 
 import { loadConfig, updateConfig, type Tokens } from '../config.js';
 import { AuthCancelled } from '../errors.js';
+import { detectLanguage, initI18n, t, type SupportedLanguage } from '../i18n/index.js';
 import { waitForAuthorizationCode } from './callbackServer.js';
 import { buildAuthorizeUrl, exchangeCodeForTokens, redirectUriFor, refreshTokens } from './oauth.js';
 import { createCodeChallenge, createCodeVerifier, createState } from './pkce.js';
@@ -22,35 +23,49 @@ const EXPIRY_SAFETY_MARGIN_MS = 60_000;
  */
 async function promptAppSetup(defaultPort: number): Promise<{ clientId: string; port: number }> {
   const portInput = await p.text({
-    message: 'Auf welchem lokalen Port soll die Anmeldung ankommen?',
+    message: t('auth.setup.portQuestion'),
     initialValue: String(defaultPort),
     validate: (value) => {
       const n = Number(value);
-      if (!Number.isInteger(n) || n < 1024 || n > 65535) return 'Bitte einen Port zwischen 1024 und 65535 angeben.';
+      if (!Number.isInteger(n) || n < 1024 || n > 65535) return t('auth.setup.portValidation');
       return undefined;
     },
   });
   if (p.isCancel(portInput)) throw new AuthCancelled();
   const port = Number(portInput);
 
-  p.log.step('Spotify-App wird benötigt (einmalig, pro Person)');
+  p.log.step(t('auth.setup.appNeededStep'));
   p.note(
     [
-      `${pc.bold('1.')} Öffne ${pc.cyan('https://developer.spotify.com/dashboard')} und erstelle eine App (mit deinem eigenen Spotify-Account).`,
-      `${pc.bold('2.')} Trage als Redirect URI ${pc.bold('genau')} das hier ein:`,
+      `${pc.bold('1.')} ${t('auth.setup.step1', { url: pc.cyan('https://developer.spotify.com/dashboard') })}`,
+      `${pc.bold('2.')} ${t('auth.setup.step2', { exact: pc.bold(t('auth.setup.exactWord')) })}`,
       `   ${pc.green(redirectUriFor(port))}`,
-      `${pc.bold('3.')} Kopiere die "Client ID" aus den App-Einstellungen (kein Secret nötig).`,
+      `${pc.bold('3.')} ${t('auth.setup.step3')}`,
     ].join('\n'),
-    'Einmalige Einrichtung'
+    t('auth.setup.noteTitle')
   );
 
   const clientId = await p.text({
-    message: 'Spotify Client ID',
-    validate: (value) => (value.trim().length === 0 ? 'Client ID darf nicht leer sein.' : undefined),
+    message: t('auth.setup.clientIdQuestion'),
+    validate: (value) => (value.trim().length === 0 ? t('auth.setup.clientIdValidation') : undefined),
   });
   if (p.isCancel(clientId)) throw new AuthCancelled();
 
   return { clientId: clientId.trim(), port };
+}
+
+/** Offers Deutsch/English (each shown in its own name, not translated — the standard convention for a language picker) and persists + activates the choice right away. */
+async function promptLanguage(current: SupportedLanguage): Promise<SupportedLanguage> {
+  const choice = await p.select({
+    message: t('auth.setup.languageQuestion'),
+    initialValue: current,
+    options: [
+      { value: 'de' as const, label: 'Deutsch' },
+      { value: 'en' as const, label: 'English' },
+    ],
+  });
+  if (p.isCancel(choice)) throw new AuthCancelled();
+  return choice;
 }
 
 async function performLogin(clientId: string, port: number): Promise<Tokens> {
@@ -64,27 +79,27 @@ async function performLogin(clientId: string, port: number): Promise<Tokens> {
 
   const opened = await open(authorizeUrl).then(() => true).catch(() => false);
   if (opened) {
-    p.log.info('Browser wurde geöffnet — bitte bei Spotify anmelden und die Berechtigung erteilen.');
+    p.log.info(t('auth.login.browserOpened'));
   } else {
-    p.log.warn('Browser konnte nicht automatisch geöffnet werden. Öffne diesen Link manuell:');
+    p.log.warn(t('auth.login.browserFailed'));
   }
   p.log.message(pc.underline(authorizeUrl));
 
   const spinner = p.spinner();
-  spinner.start('Warte auf Bestätigung im Browser…');
+  spinner.start(t('auth.login.waiting'));
 
   let code: string;
   try {
     ({ code } = await callback);
   } catch (error) {
-    spinner.stop('Anmeldung abgebrochen.', 1);
+    spinner.stop(t('auth.login.cancelled'), 1);
     throw error;
   }
-  spinner.stop('Anmeldung bestätigt.');
+  spinner.stop(t('auth.login.confirmed'));
 
   const tokenResponse = await exchangeCodeForTokens({ clientId, redirectUri, code, codeVerifier });
   if (!tokenResponse.refresh_token) {
-    throw new Error('Spotify hat keinen Refresh-Token geliefert.');
+    throw new Error(t('auth.login.noRefreshToken'));
   }
 
   return {
@@ -140,7 +155,7 @@ export async function getAccessToken(): Promise<string> {
       });
       return tokens.accessToken;
     } catch {
-      p.log.warn('Sitzung konnte nicht erneuert werden — erneute Anmeldung nötig.');
+      p.log.warn(t('auth.token.refreshFailed'));
     }
   }
 
@@ -164,6 +179,13 @@ export async function logout(): Promise<void> {
  */
 export async function runSetup(): Promise<void> {
   const config = await loadConfig();
+
+  const language = await promptLanguage(config.language ?? detectLanguage());
+  await initI18n(language); // switch right away so the rest of this same setup shows in it
+  await updateConfig((c) => {
+    c.language = language;
+  });
+
   const { clientId, port } = await promptAppSetup(config.redirectPort ?? DEFAULT_PORT);
   await updateConfig((c) => {
     c.clientId = clientId;
@@ -175,7 +197,7 @@ export async function runSetup(): Promise<void> {
   await updateConfig((c) => {
     c.tokens = tokens;
   });
-  p.log.success('Einrichtung abgeschlossen und angemeldet.');
+  p.log.success(t('auth.setup.completed'));
 }
 
 /** Forces the next getAccessToken() call to refresh instead of using the cache. */

@@ -1,24 +1,26 @@
 import * as p from '@clack/prompts';
 
 import { AuthCancelled } from '../errors.js';
+import { t } from '../i18n/index.js';
 import { getLikedSongsTotal, getMe, listOwnedPlaylists } from '../spotify/playlists.js';
 import type { TrackSource } from '../spotify/tracks.js';
 
 export async function selectSource(): Promise<{ source: TrackSource; total: number }> {
   const spinner = p.spinner();
-  spinner.start('Lade deine Playlisten…');
+  spinner.start(t('source.loading'));
 
   const me = await getMe();
   const [playlists, likedTotal] = await Promise.all([listOwnedPlaylists(me), getLikedSongsTotal()]);
 
-  spinner.stop(`${playlists.length} eigene Playlist(en) gefunden.`);
+  spinner.stop(t('source.loaded', { count: playlists.length }));
 
   const unknownCountPlaylists = playlists.filter((playlist) => playlist.items?.total == null);
   if (unknownCountPlaylists.length > 0) {
     p.log.warn(
-      `Spotify hat für ${unknownCountPlaylists.length} Playlist(en) keine Song-Anzahl geliefert: ` +
-        unknownCountPlaylists.map((playlist) => `"${playlist.name}"`).join(', ') +
-        '. Das Aufräumen funktioniert trotzdem — nur die Anzeige "? Songs" ist ungenau.'
+      t('source.unknownCountWarning', {
+        count: unknownCountPlaylists.length,
+        names: unknownCountPlaylists.map((playlist) => `"${playlist.name}"`).join(', '),
+      })
     );
   }
 
@@ -26,7 +28,7 @@ export async function selectSource(): Promise<{ source: TrackSource; total: numb
     {
       value: { source: { kind: 'liked', name: 'Liked Songs' }, total: likedTotal },
       label: `💚 Liked Songs`,
-      hint: `${likedTotal} Songs`,
+      hint: t('source.songsCount', { count: likedTotal }),
     },
     ...playlists.map((playlist) => {
       const total = playlist.items?.total;
@@ -36,13 +38,13 @@ export async function selectSource(): Promise<{ source: TrackSource; total: numb
           total: total ?? 0,
         },
         label: playlist.name,
-        hint: total == null ? '? Songs' : `${total} Songs`,
+        hint: total == null ? t('source.unknownSongCount') : t('source.songsCount', { count: total }),
       };
     }),
   ];
 
   const choice = await p.select({
-    message: 'Welche Playlist möchtest du aufräumen?',
+    message: t('source.selectQuestion'),
     options,
   });
 

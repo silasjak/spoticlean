@@ -1,5 +1,6 @@
 import { getAccessToken, invalidateAccessToken } from '../auth/session.js';
 import { debugLog } from '../debug.js';
+import { t } from '../i18n/index.js';
 
 const API_BASE = 'https://api.spotify.com/v1';
 
@@ -134,7 +135,7 @@ async function request<T>(path: string, options: RequestOptions = {}, attempt = 
     return JSON.parse(rawText) as T;
   } catch {
     throw new SpotifyApiError(
-      `Antwort von Spotify (${method} ${path}, Status ${response.status}) war kein gültiges JSON: ${rawText.slice(0, 120)}`,
+      t('spotify.client.invalidJson', { method, path, status: response.status, body: rawText.slice(0, 120) }),
       response.status
     );
   }

@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { initI18n } from '../i18n/index.js';
 import type { SpotifyTrack, TrackItem } from '../spotify/types.js';
 import { visibleLength } from './terminal.js';
 import { buildReviewFrame, type Decision, type HistoryEntry } from './reviewFrame.js';
+
+// buildReviewFrame() renders through t() — these assertions check the
+// (existing) German copy specifically, so pin the language regardless of
+// whoever's machine/CI runs this.
+await initI18n('de');
 
 function makeTrack(name: string, overrides: Partial<SpotifyTrack> = {}): SpotifyTrack {
   return {
@@ -160,19 +166,19 @@ test('the status message appears in the frame', () => {
 test('browsing mode swaps the footer hints for navigation hints', () => {
   const normal = buildReviewFrame(baseState({ history: makeHistory(3), historyCursor: null })).join('\n');
   const browsing = buildReviewFrame(baseState({ history: makeHistory(3), historyCursor: 1 })).join('\n');
-  assert.match(normal, /keep/);
-  assert.doesNotMatch(browsing, /keep/);
+  assert.match(normal, /behalten/);
+  assert.doesNotMatch(browsing, /behalten/);
   assert.match(browsing, /korrigieren/);
 });
 
-test('editing mode shows keep/remove/cancel but hides undo and history-browse hints', () => {
+test('editing mode shows keep/remove/cancel but hides the history-browse hints', () => {
   const frame = buildReviewFrame(baseState({ history: makeHistory(3), historyCursor: null, editing: true })).join(
     '\n'
   );
-  assert.match(frame, /keep/);
-  assert.match(frame, /remove/);
+  assert.match(frame, /behalten/);
+  assert.match(frame, /entfernen/);
   assert.match(frame, /abbrechen/);
-  assert.doesNotMatch(frame, /undo/);
+  assert.doesNotMatch(frame, /letzte korrigieren/);
 });
 
 test('the track being edited is marked with a note in the history list, not the header', () => {

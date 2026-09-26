@@ -1,5 +1,6 @@
 import pc from 'picocolors';
 
+import { t } from '../i18n/index.js';
 import type { SpotifyTrack, TrackItem } from '../spotify/types.js';
 import { boxBlank, boxBottom, boxDivider, boxLine, boxTop, fitWidth, innerWidth } from './box.js';
 import { formatAddedAt, formatArtists, formatDuration } from './format.js';
@@ -71,7 +72,7 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
   const browsing = historyCursor !== null;
   const hintMode = editing ? 'edit' : browsing ? 'browse' : 'review';
 
-  const title = `spoticlean · ${sourceName} · Track ${trackNumber}/${totalTracks}`;
+  const title = t('review.frame.title', { source: sourceName, current: trackNumber, total: totalTracks });
   const header = [boxTop(width, fitWidth(title, width, 3))];
 
   const card: string[] = [boxBlank(width)];
@@ -81,15 +82,23 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
     card.push(
       boxLine(
         pc.dim(
-          fitWidth(`${formatDuration(track.duration_ms)} · hinzugefügt am ${formatAddedAt(item.added_at)}`, width)
+          fitWidth(
+            `${formatDuration(track.duration_ms)} · ${t('review.frame.addedOn', { date: formatAddedAt(item.added_at) })}`,
+            width
+          )
         ),
         width
       )
     );
     if (track.is_local) {
-      card.push(boxLine(pc.dim('Lokale Datei — kein Abspielen über Spotify Connect möglich.'), width));
+      card.push(boxLine(pc.dim(t('review.frame.localFile')), width));
     } else if (hasDevice) {
-      card.push(boxLine(pc.dim(`${isPaused ? '⏸' : '▶'} ab ${formatDuration(positionMs)}`), width));
+      card.push(
+        boxLine(
+          pc.dim(`${isPaused ? '⏸' : '▶'} ${t('review.frame.positionFrom', { time: formatDuration(positionMs) })}`),
+          width
+        )
+      );
     }
   }
   // Always exactly one status row (blank when there's nothing to say) so the
@@ -132,7 +141,7 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
       const entry = history[globalIndex]!;
       const symbol = entry.decision === 'removed' ? '✗' : '✓';
       const isBeingEdited = globalIndex === editingIndex;
-      const label = `${symbol} ${entry.track.name}${isBeingEdited ? ' (wird korrigiert)' : ''}`;
+      const label = `${symbol} ${entry.track.name}${isBeingEdited ? t('review.frame.beingCorrected') : ''}`;
       const fitted = fitWidth(label, width);
       // Being-edited and browse-cursor are mutually exclusive (see above), but
       // check editing first anyway so its more subdued style always wins.
@@ -149,9 +158,9 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
       historyLines.length > 0
         ? historyLines
         : historyCapacity > 0
-          ? [boxLine(pc.dim('Noch keine Entscheidungen.'), width)]
+          ? [boxLine(pc.dim(t('review.frame.noDecisionsYet')), width)]
           : [];
-    historySection = [boxDivider(width, 'Verlauf'), ...lines];
+    historySection = [boxDivider(width, t('review.frame.historyTitle')), ...lines];
   }
 
   return [...header, ...card, ...historySection, ...footer];

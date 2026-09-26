@@ -25,6 +25,7 @@
     "env-paths": "^3.0.0",
     "figlet": "^1.11.4",
     "gradient-string": "^3.0.0",
+    "i18next": "^26.4.2",
     "open": "^10.1.0",
     "picocolors": "^1.1.1"
   },

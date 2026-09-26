@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import { spotify } from './client.js';
 import type { Paging, SpotifyTrack, TrackItem } from './types.js';
 
@@ -22,7 +23,7 @@ type RawEntry = { added_at: string; track?: SpotifyTrack; item?: SpotifyTrack };
 function normalize(raw: RawEntry): TrackItem {
   const track = raw.item ?? raw.track;
   if (!track) {
-    throw new Error('Unerwartete Antwort von Spotify: weder "track" noch "item" im Eintrag vorhanden.');
+    throw new Error(t('spotify.tracks.unexpectedShape'));
   }
   return { added_at: raw.added_at, track };
 }
@@ -84,7 +85,7 @@ export async function removeTrack(source: TrackSource, track: SpotifyTrack): Pro
   // don't support them. Fail clearly instead of sending a spotify:local:
   // URI and getting back some other opaque error.
   if (track.is_local) {
-    throw new Error('Lokale Dateien können nicht aus Liked Songs entfernt werden.');
+    throw new Error(t('spotify.tracks.localNotRemovable'));
   }
   // DELETE /me/library (Feb 2026: replaces the entity-specific /me/tracks,
   // /me/albums, etc. — addresses everything by URI via a query param).
@@ -101,7 +102,7 @@ export async function restoreTrack(source: TrackSource, track: SpotifyTrack): Pr
   }
 
   if (track.is_local) {
-    throw new Error('Lokale Dateien können nicht zu Liked Songs hinzugefügt werden.');
+    throw new Error(t('spotify.tracks.localNotRestorable'));
   }
   await spotify.put('/me/library', undefined, { uris: track.uri });
 }

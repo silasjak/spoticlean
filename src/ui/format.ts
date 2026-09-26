@@ -1,3 +1,4 @@
+import { localeTag } from '../i18n/index.js';
 import type { SpotifyTrack } from '../spotify/types.js';
 
 export function formatDuration(ms: number): string {
@@ -13,7 +14,7 @@ export function formatArtists(track: SpotifyTrack): string {
 
 export function formatAddedAt(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString('de-DE', { year: 'numeric', month: 'short', day: 'numeric' });
+    return new Date(iso).toLocaleDateString(localeTag(), { year: 'numeric', month: 'short', day: 'numeric' });
   } catch {
     return iso;
   }

@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js';
+
 const AUTHORIZE_URL = 'https://accounts.spotify.com/authorize';
 const TOKEN_URL = 'https://accounts.spotify.com/api/token';
 
@@ -55,7 +57,7 @@ async function postForm(body: Record<string, string>): Promise<TokenResponse> {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Spotify Token-Endpoint antwortete mit ${response.status}: ${text}`);
+    throw new Error(t('auth.oauth.tokenEndpointError', { status: response.status, body: text }));
   }
 
   return (await response.json()) as TokenResponse;

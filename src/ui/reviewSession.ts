@@ -3,6 +3,7 @@ import pc from 'picocolors';
 import open from 'open';
 
 import { loadConfig, updateConfig } from '../config.js';
+import { t } from '../i18n/index.js';
 import { SpotifyApiError } from '../spotify/client.js';
 import { estimateChorusPositionMs, pausePlayback, playTrackAt, resumePlayback, seek } from '../spotify/playback.js';
 import { fetchAllTracks, removeTrack, restoreTrack, type TrackSource } from '../spotify/tracks.js';
@@ -26,10 +27,10 @@ async function loadResumeOffset(source: TrackSource, total: number): Promise<num
   if (!saved || saved.offset <= 0 || saved.offset >= total) return 0;
 
   const choice = await p.select({
-    message: `Du hattest hier bei Track ${saved.offset + 1}/${saved.total} aufgehört.`,
+    message: t('review.resume.question', { current: saved.offset + 1, total: saved.total }),
     options: [
-      { value: saved.offset, label: 'Fortsetzen' },
-      { value: 0, label: 'Von vorne beginnen' },
+      { value: saved.offset, label: t('review.resume.continueOption') },
+      { value: 0, label: t('review.resume.startOverOption') },
     ],
   });
 
@@ -75,7 +76,7 @@ export async function runReviewSession(
   deviceId: string | undefined
 ): Promise<ReviewSummary> {
   if (!isInteractiveTerminal()) {
-    throw new Error('spoticlean braucht ein interaktives Terminal (TTY), um Tasten lesen zu können.');
+    throw new Error(t('review.needsTty'));
   }
 
   // Loading + resume choice still happen in the normal scrollback via clack —
@@ -85,17 +86,17 @@ export async function runReviewSession(
   // rejection with a bare, contextless message ("Forbidden") instead of a
   // clear "loading X failed" one.
   const spinner = p.spinner();
-  spinner.start(`Lade Songs aus "${source.name}"…`);
+  spinner.start(t('review.loading', { name: source.name }));
   let tracks: TrackItem[];
   try {
     tracks = await fetchAllTracks(source, (loaded, loadedTotal) => {
-      spinner.message(`Lade Songs aus "${source.name}"… (${loaded}/${loadedTotal})`);
+      spinner.message(t('review.loadingProgress', { name: source.name, loaded, total: loadedTotal }));
     });
   } catch (error) {
-    spinner.stop(`Laden von "${source.name}" fehlgeschlagen.`, 1);
-    throw new Error(`Songs aus "${source.name}" konnten nicht geladen werden: ${(error as Error).message}`);
+    spinner.stop(t('review.loadFailed', { name: source.name }), 1);
+    throw new Error(t('review.loadError', { name: source.name, message: (error as Error).message }));
   }
-  spinner.stop(`${tracks.length} Songs geladen.`);
+  spinner.stop(t('review.loaded', { count: tracks.length }));
 
   const startOffset = await loadResumeOffset(source, tracks.length);
 
@@ -158,16 +159,14 @@ export async function runReviewSession(
     if (hasDevice && reason && SESSION_ENDING_REASONS.has(reason)) {
       hasDevice = false;
       setStatus(
-        reason === 'PREMIUM_REQUIRED'
-          ? 'Automatisches Abspielen benötigt Spotify Premium — nur noch Metadaten.'
-          : 'Kein aktives Wiedergabegerät mehr gefunden — nur noch Metadaten.',
+        t(reason === 'PREMIUM_REQUIRED' ? 'review.playback.premiumRequired' : 'review.playback.noDevice'),
         pc.yellow
       );
       return;
     }
 
     const detail = reason ? ` (${reason})` : '';
-    setStatus(`Wiedergabe-Aktion fehlgeschlagen${detail}: ${(error as Error).message}`, pc.yellow);
+    setStatus(t('review.playback.actionFailed', { detail, message: (error as Error).message }), pc.yellow);
   };
 
   const onResize = () => render();
@@ -204,7 +203,7 @@ export async function runReviewSession(
     switch (normalized) {
       case 'o':
         openInSpotify(track);
-        setStatus(`In Spotify geöffnet: ${track.name}`, pc.dim);
+        setStatus(t('review.openedInSpotify', { name: track.name }), pc.dim);
         return true;
       case ' ':
         if (hasDevice) {
@@ -307,20 +306,20 @@ export async function runReviewSession(
 
     if (action !== 'quit' && action !== 'cancel' && action !== previousDecision) {
       if (action === 'removed') {
-        setStatus(`Entferne: ${track.name}…`, pc.dim);
+        setStatus(t('review.removing', { name: track.name }), pc.dim);
         try {
           await removeTrack(source, track);
-          setStatus(`✗ Entfernt: ${track.name}`, pc.red);
+          setStatus(`✗ ${t('review.removed', { name: track.name })}`, pc.red);
         } catch (error) {
-          setStatus(`Entfernen fehlgeschlagen (${track.name}): ${(error as Error).message}`, pc.red);
+          setStatus(t('review.removeFailed', { name: track.name, message: (error as Error).message }), pc.red);
         }
       } else {
-        setStatus(`Wiederherstellen: ${track.name}…`, pc.dim);
+        setStatus(t('review.restoring', { name: track.name }), pc.dim);
         try {
           await restoreTrack(source, track);
-          setStatus(`↺ Wiederhergestellt: ${track.name}`, pc.dim);
+          setStatus(`↺ ${t('review.restored', { name: track.name })}`, pc.dim);
         } catch (error) {
-          setStatus(`Wiederherstellen fehlgeschlagen: ${(error as Error).message}`, pc.red);
+          setStatus(t('review.restoreFailed', { message: (error as Error).message }), pc.red);
         }
       }
       decisions.set(targetIndex, action);
@@ -406,7 +405,7 @@ export async function runReviewSession(
           // decision — reusing editHistoryEntry() rather than a separate
           // pop/rewind path, so there's exactly one way this behaves.
           if (history.length === 0) {
-            setStatus('Nichts zum Korrigieren.', pc.dim);
+            setStatus(t('review.nothingToCorrect'), pc.dim);
             break;
           }
           const quitRequested = await editHistoryEntry(history.length - 1);
@@ -438,15 +437,15 @@ export async function runReviewSession(
     history.push({ index: view.index, decision: action, track });
 
     if (action === 'removed') {
-      setStatus(`Entferne: ${track.name}…`, pc.dim);
+      setStatus(t('review.removing', { name: track.name }), pc.dim);
       try {
         await removeTrack(source, track);
-        setStatus(`✗ Entfernt: ${track.name}`, pc.red);
+        setStatus(`✗ ${t('review.removed', { name: track.name })}`, pc.red);
       } catch (error) {
-        setStatus(`Entfernen fehlgeschlagen (${track.name}): ${(error as Error).message}`, pc.red);
+        setStatus(t('review.removeFailed', { name: track.name, message: (error as Error).message }), pc.red);
       }
     } else {
-      setStatus(`✓ Behalten: ${track.name}`, pc.green);
+      setStatus(`✓ ${t('review.kept', { name: track.name })}`, pc.green);
     }
 
     view.index += 1;
@@ -465,7 +464,7 @@ export async function runReviewSession(
           const shouldQuit = await reviewOneTrack();
           if (shouldQuit) break;
         } catch (error) {
-          setStatus(`Unerwarteter Fehler: ${(error as Error).message} — springe zum nächsten Song.`, pc.red);
+          setStatus(t('review.unexpectedError', { message: (error as Error).message }), pc.red);
           view.index += 1;
           await saveResumeOffset(source, view.index, tracks.length).catch(() => undefined);
         }

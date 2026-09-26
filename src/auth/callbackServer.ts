@@ -1,11 +1,16 @@
 import { createServer, type Server } from 'node:http';
 
+import { currentLanguage, t } from '../i18n/index.js';
+
 export type CallbackResult = {
   code: string;
 };
 
-const SUCCESS_HTML = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>spoticlean-cli</title>
+// Built lazily (not module-level constants) so the page picks up whichever
+// language is active when the callback actually fires, not whatever it was
+// at import time (before cli.ts's main() has initialized i18n).
+const successHtml = () => `<!doctype html>
+<html lang="${currentLanguage()}"><head><meta charset="utf-8"><title>spoticlean-cli</title>
 <style>
   body { background:#121212; color:#eaeaea; font-family: system-ui, sans-serif;
          display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
@@ -14,12 +19,12 @@ const SUCCESS_HTML = `<!doctype html>
   p { color:#9a9a9a; }
 </style></head>
 <body><div class="card">
-  <h1>✓ Verbunden</h1>
-  <p>Du kannst dieses Tab schließen und zum Terminal zurückkehren.</p>
+  <h1>✓ ${t('auth.callback.successTitle')}</h1>
+  <p>${t('auth.callback.successBody')}</p>
 </div></body></html>`;
 
-const ERROR_HTML = (message: string) => `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>spoticlean-cli</title>
+const errorHtml = (message: string) => `<!doctype html>
+<html lang="${currentLanguage()}"><head><meta charset="utf-8"><title>spoticlean-cli</title>
 <style>
   body { background:#121212; color:#eaeaea; font-family: system-ui, sans-serif;
          display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
@@ -28,7 +33,7 @@ const ERROR_HTML = (message: string) => `<!doctype html>
   p { color:#9a9a9a; }
 </style></head>
 <body><div class="card">
-  <h1>✗ Anmeldung fehlgeschlagen</h1>
+  <h1>✗ ${t('auth.callback.errorTitle')}</h1>
   <p>${message}</p>
 </div></body></html>`;
 
@@ -58,26 +63,24 @@ export function waitForAuthorizationCode(options: {
       const state = url.searchParams.get('state');
 
       if (error) {
-        res.writeHead(400, { 'Content-Type': 'text/html' }).end(ERROR_HTML(error));
-        finish(() => reject(new Error(`Spotify meldete einen Fehler: ${error}`)));
+        res.writeHead(400, { 'Content-Type': 'text/html' }).end(errorHtml(error));
+        finish(() => reject(new Error(t('auth.callback.spotifyError', { error }))));
         return;
       }
 
       if (!code || state !== expectedState) {
-        res.writeHead(400, { 'Content-Type': 'text/html' }).end(
-          ERROR_HTML('Ungültige Antwort (state stimmt nicht überein).')
-        );
-        finish(() => reject(new Error('OAuth state mismatch — mögliche CSRF oder abgelaufene Anfrage.')));
+        res.writeHead(400, { 'Content-Type': 'text/html' }).end(errorHtml(t('auth.callback.invalidState')));
+        finish(() => reject(new Error(t('auth.callback.stateMismatchError'))));
         return;
       }
 
-      res.writeHead(200, { 'Content-Type': 'text/html' }).end(SUCCESS_HTML);
+      res.writeHead(200, { 'Content-Type': 'text/html' }).end(successHtml());
       finish(() => resolve({ code }));
     });
 
     const timeout = setTimeout(() => {
       server.close();
-      reject(new Error('Zeitüberschreitung: Es kam keine Antwort von Spotify.'));
+      reject(new Error(t('auth.callback.timeout')));
     }, timeoutMs);
 
     function finish(fn: () => void) {
@@ -90,11 +93,7 @@ export function waitForAuthorizationCode(options: {
     server.on('error', (err: NodeJS.ErrnoException) => {
       clearTimeout(timeout);
       if (err.code === 'EADDRINUSE') {
-        reject(
-          new Error(
-            `Port ${port} ist bereits belegt. Führe "spoticlean setup" aus und wähle einen anderen Port.`
-          )
-        );
+        reject(new Error(t('auth.callback.portInUse', { port })));
         return;
       }
       reject(err);

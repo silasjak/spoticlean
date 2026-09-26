@@ -2,9 +2,10 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 
 import { logout, runSetup } from './auth/session.js';
-import { configFilePath } from './config.js';
+import { configFilePath, loadConfig } from './config.js';
 import { debugLogFilePath, isDebugEnabled } from './debug.js';
 import { AuthCancelled } from './errors.js';
+import { detectLanguage, initI18n, t } from './i18n/index.js';
 import { printBanner } from './ui/banner.js';
 import { prepareDevice } from './ui/device.js';
 import { runReviewSession } from './ui/reviewSession.js';
@@ -12,30 +13,62 @@ import { selectSource } from './ui/selectSource.js';
 
 function printSummary(summary: Awaited<ReturnType<typeof runReviewSession>>): void {
   const lines = [
-    `${pc.green(`✓ ${summary.kept} behalten`)}`,
-    `${pc.red(`✗ ${summary.removed.length} entfernt`)}`,
+    pc.green(`✓ ${t('cli.summary.kept', { count: summary.kept })}`),
+    pc.red(`✗ ${t('cli.summary.removed', { count: summary.removed.length })}`),
   ];
   if (summary.removed.length > 0) {
-    lines.push('', pc.dim('Entfernt:'));
+    lines.push('', pc.dim(t('cli.summary.removedListTitle')));
     for (const track of summary.removed.slice(0, 15)) {
       lines.push(pc.dim(`  • ${track.name}`));
     }
     if (summary.removed.length > 15) {
-      lines.push(pc.dim(`  … und ${summary.removed.length - 15} weitere`));
+      lines.push(pc.dim(`  ${t('cli.summary.removedMore', { count: summary.removed.length - 15 })}`));
     }
   }
   if (summary.quitEarly) {
-    lines.push('', pc.dim(`Abgebrochen bei Track ${summary.reviewedCount + 1}/${summary.total} — beim nächsten Mal geht's von hier weiter.`));
+    lines.push(
+      '',
+      pc.dim(t('cli.summary.quitEarly', { current: summary.reviewedCount + 1, total: summary.total }))
+    );
   }
-  p.note(lines.join('\n'), 'Zusammenfassung');
+  p.note(lines.join('\n'), t('cli.summary.title'));
 }
 
 async function runLogout(): Promise<void> {
   await logout();
-  p.log.success('Abgemeldet. Beim nächsten Start ist eine erneute Anmeldung nötig.');
+  p.log.success(t('cli.logoutSuccess'));
+}
+
+function printHelp(): void {
+  const rows: [string, string][] = [
+    [t('cli.help.noCommandLabel'), t('cli.help.noCommandDesc')],
+    ['setup', t('cli.help.setupDesc')],
+    ['logout', t('cli.help.logoutDesc')],
+    ['help', t('cli.help.helpDesc')],
+    ['--debug', t('cli.help.debugFlagDesc')],
+    ['', t('cli.help.debugFlagHint')],
+  ];
+  const labelWidth = Math.max(...rows.map(([label]) => label.length));
+  const helpLines = rows.map(([label, desc]) => `  ${label.padEnd(labelWidth + 2)}${desc}`);
+
+  console.log(
+    [
+      'spoticlean [command] [--debug]',
+      '',
+      ...helpLines.slice(0, 4),
+      '',
+      ...helpLines.slice(4, 6),
+      '',
+      t('cli.help.configPath', { path: configFilePath() }),
+      t('cli.help.debugLogPath', { path: debugLogFilePath() }),
+    ].join('\n')
+  );
 }
 
 export async function main(argv: string[]): Promise<void> {
+  const config = await loadConfig();
+  await initI18n(config.language ?? detectLanguage());
+
   const command = argv[0];
 
   if (command === 'logout') {
@@ -48,10 +81,10 @@ export async function main(argv: string[]): Promise<void> {
     p.intro(pc.bgGreen(pc.black(' spoticlean-cli setup ')));
     try {
       await runSetup();
-      p.outro(pc.green('Bereit! ✨'));
+      p.outro(pc.green(t('cli.setupReady')));
     } catch (error) {
       if (p.isCancel(error) || error instanceof AuthCancelled) {
-        p.cancel('Abgebrochen.');
+        p.cancel(t('common.cancelled'));
         return;
       }
       throw error;
@@ -60,22 +93,7 @@ export async function main(argv: string[]): Promise<void> {
   }
 
   if (command === 'help' || command === '--help' || command === '-h') {
-    console.log(
-      [
-        'spoticlean [command] [--debug]',
-        '',
-        '  (kein Befehl)   Playlist aufräumen (fragt bei Erstnutzung automatisch nach Setup)',
-        '  setup           Spotify-App (Client ID) / Port neu einrichten',
-        '  logout          Gespeicherte Anmeldung entfernen',
-        '  help            Diese Hilfe',
-        '',
-        '  --debug         Jeden Spotify-API-Request/-Response in eine Log-Datei schreiben',
-        '                  (auch per SPOTICLEAN_DEBUG=1 aktivierbar)',
-        '',
-        `Konfiguration liegt unter ${configFilePath()}`,
-        `Debug-Log liegt unter      ${debugLogFilePath()}`,
-      ].join('\n')
-    );
+    printHelp();
     return;
   }
 
@@ -83,7 +101,7 @@ export async function main(argv: string[]): Promise<void> {
   p.intro(pc.bgGreen(pc.black(' spoticlean-cli ')));
 
   if (isDebugEnabled()) {
-    p.log.info(`Debug-Modus an — Requests/Responses landen in: ${debugLogFilePath()}`);
+    p.log.info(t('cli.debugModeOn', { path: debugLogFilePath() }));
   }
 
   try {
@@ -91,10 +109,10 @@ export async function main(argv: string[]): Promise<void> {
     const deviceId = await prepareDevice();
     const summary = await runReviewSession(source, deviceId);
     printSummary(summary);
-    p.outro(pc.green('Fertig! ✨'));
+    p.outro(pc.green(t('cli.outroDone')));
   } catch (error) {
     if (p.isCancel(error) || error instanceof AuthCancelled) {
-      p.cancel('Abgebrochen.');
+      p.cancel(t('common.cancelled'));
       return;
     }
     throw error;

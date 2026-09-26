@@ -2,6 +2,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import envPaths from 'env-paths';
 
+import type { SupportedLanguage } from './i18n/index.js';
+
 export type Tokens = {
   accessToken: string;
   refreshToken: string;
@@ -23,6 +25,8 @@ export type StoredConfig = {
   tokens?: Tokens;
   /** Keyed by playlist id, or the literal "liked-songs". */
   resume?: Record<string, ResumeState>;
+  /** Explicit override; unset means "detect from the OS locale". Set via `spoticlean setup`. */
+  language?: SupportedLanguage;
 };
 
 const paths = envPaths('spoticlean-cli', { suffix: '' });

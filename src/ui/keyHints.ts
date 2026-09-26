@@ -1,28 +1,37 @@
 import pc from 'picocolors';
 
+import { t } from '../i18n/index.js';
 import { visibleLength } from './terminal.js';
 
 type KeyHint = { key: string; desc: string; requiresDevice?: boolean };
 export type HintMode = 'review' | 'browse' | 'edit';
 
-const REVIEW_HINTS: KeyHint[] = [
-  { key: '⏎/k', desc: 'keep' },
-  { key: '⌫/r', desc: 'remove' },
-  { key: '↑/↓', desc: 'Verlauf' },
-  { key: 'u', desc: 'letzte korrigieren' },
-  { key: '␣', desc: 'pause', requiresDevice: true },
-  { key: '←/→', desc: 'seek', requiresDevice: true },
-  { key: 'b', desc: 'refrain', requiresDevice: true },
-  { key: 'o', desc: 'open' },
-  { key: 'q', desc: 'quit' },
-];
+// Built as functions (not module-level constants) so `desc` picks up the
+// active language at render time — i18n only initializes once cli.ts's
+// main() runs, which is after this module is first imported.
 
-/** Shown instead of REVIEW_HINTS while a history entry is highlighted (browsing mode, not yet committed to reopening it). */
-const BROWSE_HINTS: KeyHint[] = [
-  { key: '↑/↓', desc: 'auswählen' },
-  { key: '⏎', desc: 'öffnen & korrigieren' },
-  { key: 'Esc', desc: 'abbrechen' },
-];
+function reviewHints(): KeyHint[] {
+  return [
+    { key: '⏎/k', desc: t('review.hints.keep') },
+    { key: '⌫/r', desc: t('review.hints.remove') },
+    { key: '↑/↓', desc: t('review.hints.history') },
+    { key: 'u', desc: t('review.hints.correctLast') },
+    { key: '␣', desc: t('review.hints.pause'), requiresDevice: true },
+    { key: '←/→', desc: t('review.hints.seek'), requiresDevice: true },
+    { key: 'b', desc: t('review.hints.chorus'), requiresDevice: true },
+    { key: 'o', desc: t('review.hints.open') },
+    { key: 'q', desc: t('review.hints.quit') },
+  ];
+}
+
+/** Shown instead of reviewHints() while a history entry is highlighted (browsing mode, not yet committed to reopening it). */
+function browseHints(): KeyHint[] {
+  return [
+    { key: '↑/↓', desc: t('review.hints.select') },
+    { key: '⏎', desc: t('review.hints.openAndCorrect') },
+    { key: 'Esc', desc: t('review.hints.cancel') },
+  ];
+}
 
 /**
  * Shown while re-deciding one specific past track from the history browser.
@@ -30,15 +39,17 @@ const BROWSE_HINTS: KeyHint[] = [
  * playback) is in play; everything else keeps its original decision and the
  * session returns to where it was once this is confirmed or cancelled.
  */
-const EDIT_HINTS: KeyHint[] = [
-  { key: '⏎/k', desc: 'keep' },
-  { key: '⌫/r', desc: 'remove' },
-  { key: '␣', desc: 'pause', requiresDevice: true },
-  { key: '←/→', desc: 'seek', requiresDevice: true },
-  { key: 'b', desc: 'refrain', requiresDevice: true },
-  { key: 'o', desc: 'open' },
-  { key: 'Esc', desc: 'abbrechen' },
-];
+function editHints(): KeyHint[] {
+  return [
+    { key: '⏎/k', desc: t('review.hints.keep') },
+    { key: '⌫/r', desc: t('review.hints.remove') },
+    { key: '␣', desc: t('review.hints.pause'), requiresDevice: true },
+    { key: '←/→', desc: t('review.hints.seek'), requiresDevice: true },
+    { key: 'b', desc: t('review.hints.chorus'), requiresDevice: true },
+    { key: 'o', desc: t('review.hints.open') },
+    { key: 'Esc', desc: t('review.hints.cancel') },
+  ];
+}
 
 const SEPARATOR = '   ';
 
@@ -51,7 +62,7 @@ function renderHint(hint: KeyHint): string {
  * second (or third) line on a narrow terminal instead of overflowing.
  */
 export function buildKeyHintLines(hasDevice: boolean, maxWidth: number, mode: HintMode = 'review'): string[] {
-  const source = mode === 'browse' ? BROWSE_HINTS : mode === 'edit' ? EDIT_HINTS : REVIEW_HINTS;
+  const source = mode === 'browse' ? browseHints() : mode === 'edit' ? editHints() : reviewHints();
   const hints = source.filter((hint) => hasDevice || !hint.requiresDevice);
   const lines: string[] = [];
   let current = '';

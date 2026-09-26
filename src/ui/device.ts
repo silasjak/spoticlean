@@ -1,6 +1,7 @@
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 
+import { t } from '../i18n/index.js';
 import { getDevices, transferPlayback } from '../spotify/playback.js';
 
 /**
@@ -14,10 +15,7 @@ export async function prepareDevice(): Promise<string | undefined> {
   const usable = devices.filter((device) => device.id && !device.is_restricted);
 
   if (usable.length === 0) {
-    p.log.warn(
-      'Kein Spotify-Gerät gefunden. Öffne Spotify auf deinem Handy, Desktop oder im Browser und starte die App erneut, ' +
-        `um automatisches Abspielen zu nutzen. Bis dahin kannst du Songs mit ${pc.bold('o')} manuell öffnen.`
-    );
+    p.log.warn(t('device.noneFound', { key: pc.bold('o') }));
     return undefined;
   }
 
@@ -31,7 +29,7 @@ export async function prepareDevice(): Promise<string | undefined> {
   }
 
   const choice = await p.select({
-    message: 'Auf welchem Gerät soll abgespielt werden?',
+    message: t('device.selectQuestion'),
     options: usable.map((device) => ({
       value: device.id!,
       label: device.name,
