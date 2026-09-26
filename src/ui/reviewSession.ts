@@ -177,8 +177,13 @@ export async function runReviewSession(
 
   // Starts (or restarts) chorus-first playback for `track`, currently shown
   // at view.index, and renders. Shared between entering a track normally and
-  // resuming the original track after a history-browser detour.
+  // resuming the original track after a history-browser detour. Also clears
+  // any leftover status message — otherwise the previous track's "✓ Behalten:
+  // …"/"✗ Entfernt: …" keeps showing while you're already reviewing (or
+  // playing back) a different one, which reads as if it were about *this*
+  // track.
   async function startPlayback(track: SpotifyTrack): Promise<void> {
+    status = undefined;
     view.positionMs = estimateChorusPositionMs(track.duration_ms);
     view.isPaused = false;
     render();
@@ -210,16 +215,14 @@ export async function runReviewSession(
           render();
         }
         return true;
-      case '.':
-      case 'l':
+      case 'right':
         if (hasDevice) {
           view.positionMs += SEEK_STEP_MS;
           await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
           render();
         }
         return true;
-      case ',':
-      case 'h':
+      case 'left':
         if (hasDevice) {
           view.positionMs = Math.max(0, view.positionMs - SEEK_STEP_MS);
           await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
@@ -243,30 +246,9 @@ export async function runReviewSession(
       ? 'enter'
       : key.name === 'backspace' || key.name === 'delete' || key.char === '\u007f'
         ? 'backspace'
-        : key.name === 'up' || key.name === 'down' || key.name === 'escape'
+        : key.name === 'up' || key.name === 'down' || key.name === 'left' || key.name === 'right' || key.name === 'escape'
           ? key.name
           : key.char?.toLowerCase();
-  }
-
-  // Undoes exactly the most recent decision (pops `history`, restores via
-  // the API if it had been removed). Used by the plain `u` key.
-  async function undoOne(): Promise<void> {
-    const last = history.pop();
-    if (!last) return;
-    decisions.delete(last.index);
-    view.index = last.index;
-
-    if (last.decision === 'removed') {
-      setStatus(`Wiederherstellen: ${last.track.name}…`, pc.dim);
-      try {
-        await restoreTrack(source, last.track);
-        setStatus(`↺ Wiederhergestellt: ${last.track.name}`, pc.dim);
-      } catch (error) {
-        setStatus(`Wiederherstellen fehlgeschlagen: ${(error as Error).message}`, pc.red);
-      }
-    } else {
-      setStatus(`↺ Zurückgenommen: ${last.track.name}`, pc.dim);
-    }
   }
 
   // Re-decides exactly one past track picked in the history browser, then
@@ -361,7 +343,7 @@ export async function runReviewSession(
     const track = item.track;
     await startPlayback(track);
 
-    let action: Decision | 'undo' | 'quit' | undefined;
+    let action: Decision | 'quit' | undefined;
 
     while (!action) {
       const key = await readKey();
@@ -419,9 +401,22 @@ export async function runReviewSession(
         case 'q':
           action = 'quit';
           break;
-        case 'u':
-          action = 'undo';
+        case 'u': {
+          // Fast shortcut for the most common case — correcting the very last
+          // decision — reusing editHistoryEntry() rather than a separate
+          // pop/rewind path, so there's exactly one way this behaves.
+          if (history.length === 0) {
+            setStatus('Nichts zum Korrigieren.', pc.dim);
+            break;
+          }
+          const quitRequested = await editHistoryEntry(history.length - 1);
+          if (quitRequested) {
+            quitEarly = true;
+            return true;
+          }
+          await startPlayback(track); // resume the original track after the detour
           break;
+        }
         case 'up':
           if (history.length > 0) {
             historyCursor = history.length - 1;
@@ -437,15 +432,6 @@ export async function runReviewSession(
     if (action === 'quit') {
       quitEarly = true;
       return true;
-    }
-
-    if (action === 'undo') {
-      if (history.length === 0) {
-        setStatus('Nichts zum Zurücknehmen.', pc.dim);
-        return false;
-      }
-      await undoOne();
-      return false;
     }
 
     decisions.set(view.index, action);
