@@ -1,19 +1,18 @@
 # spoticlean
 
-Interaktive Kommandozeilen-App, um deine Spotify-Playlisten (und deine
-„Liked Songs“) aufzuräumen: Song anhören — möglichst direkt am Refrain —
-und dann **behalten** oder **entfernen**.
+Interactive command-line app to clean up your Spotify playlists (and your
+"Liked Songs"): listen to a song — jumping straight to the chorus if
+possible — then **keep** or **remove** it.
 
 ![node](https://img.shields.io/badge/node-%3E%3D20-1DB954)
 [![CI](https://github.com/silasjak/spoticlean/actions/workflows/ci.yml/badge.svg)](https://github.com/silasjak/spoticlean/actions/workflows/ci.yml)
 
-## Voraussetzungen
+## Requirements
 
 - Node.js ≥ 20
-- Ein Spotify-Account. Für automatisches Abspielen wird **Spotify
-  Premium** plus ein **aktives Gerät** benötigt (Handy, Desktop oder
-  Web-Player) — ohne das funktioniert das Aufräumen trotzdem, nur ohne
-  automatischen Sofort-Refrain.
+- A Spotify account. Auto-play needs **Spotify Premium** plus an **active
+  device** (phone, desktop, or web player) — cleanup still works without
+  that, just without the automatic jump to the chorus.
 
 ## Installation
 
@@ -23,28 +22,27 @@ npm run build
 npm link
 ```
 
-Für die Entwicklung (ohne Build, mit Hot-Reload): `npm run dev`.
+For development (no build, with hot reload): `npm run dev`.
 
 ## Setup
 
-Diese App nutzt OAuth **Authorization Code + PKCE** — du brauchst nur
-eine **Client ID**, kein Secret. Das ist ein einmaliger, rein manueller
-Schritt auf Spotifys eigener Seite (dafür gibt's keine API):
+This app uses OAuth **Authorization Code + PKCE** — you only need a
+**Client ID**, no secret. That's a one-time, purely manual step on
+Spotify's own site (there's no API for it):
 
-1. Öffne das [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-   und erstelle eine neue App mit deinem eigenen Spotify-Account.
-2. Trage als Redirect URI `http://127.0.0.1:8888/callback` ein (Port
-   anpassen, falls du beim Start einen anderen als den Standard `8888`
-   wählst).
-3. Starte `spoticlean` — Client-ID-Eingabe, Login und Sprachwahl führt
-   die CLI selbst interaktiv durch.
+1. Open the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+   and create a new app with your own Spotify account.
+2. Enter `http://127.0.0.1:8888/callback` as the Redirect URI (adjust the
+   port if you pick something other than the default `8888` on startup).
+3. Run `spoticlean` — the CLI walks you through entering the Client ID,
+   logging in, and choosing a language interactively.
 
-Manuelles Setzen der Werte analog `.env.example` ist auch möglich.
+Setting the values manually, similar to `.env.example`, also works.
 
-Die Bedienung (Tastenkürzel, Verlauf, Einstellungen, Debug-Modus, …)
-erschließt sich beim Ausprobieren von selbst — die Tastenleiste ist immer
-sichtbar, und `spoticlean help` listet alles Weitere auf.
+The rest (keyboard shortcuts, history, settings, debug mode, …) is
+discoverable just by trying it — the key bar is always visible, and
+`spoticlean help` lists everything else.
 
-## Lizenz
+## License
 
 MIT
