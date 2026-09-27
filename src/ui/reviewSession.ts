@@ -2,7 +2,7 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import open from 'open';
 
-import { loadConfig, updateConfig } from '../config.js';
+import { loadConfig, updateConfig, type ResumeState } from '../config.js';
 import { t } from '../i18n/index.js';
 import { SpotifyApiError } from '../spotify/client.js';
 import { estimateChorusPositionMs, pausePlayback, playTrackAt, resumePlayback, seek } from '../spotify/playback.js';
@@ -21,15 +21,41 @@ function resumeKeyFor(source: TrackSource): string {
   return source.kind === 'liked' ? 'liked-songs' : `playlist:${source.id}`;
 }
 
-async function loadResumeOffset(source: TrackSource, total: number): Promise<number> {
+/**
+ * Finds where to resume by locating the saved cursor's *track* in the
+ * freshly-fetched list, not by trusting a raw position — indices from an
+ * earlier session don't survive songs that were since removed (a preceding
+ * removal shifts everything after it one slot earlier, but a URI still
+ * identifies the right track wherever it now sits). Doesn't disambiguate
+ * duplicate tracks in the same source; a rare enough case not to bother.
+ * Pure and exported (unlike the two functions below it) so this — the part
+ * that actually had the bug — is unit-testable without driving a clack
+ * prompt or touching the config file.
+ */
+export function findResumeIndex(tracks: TrackItem[], saved: ResumeState | undefined): number {
+  if (!saved) return 0;
+  const foundIndex = tracks.findIndex((item) => item.track.uri === saved.nextTrackUri);
+  // Not just "not found" (that track's gone missing some other way) but also
+  // "found at 0" (nothing before it to actually skip) both mean there's
+  // nothing worth resuming to — starting over would do the exact same thing.
+  return foundIndex > 0 ? foundIndex : 0;
+}
+
+/** What `resume[key]` should become after this decision — or undefined to clear it, once every track has one. Pure for the same reason as `findResumeIndex`. */
+export function nextResumeState(tracks: TrackItem[], nextIndex: number): ResumeState | undefined {
+  const next = tracks[nextIndex];
+  return next ? { nextTrackUri: next.track.uri, updatedAt: new Date().toISOString() } : undefined;
+}
+
+async function loadResumeOffset(source: TrackSource, tracks: TrackItem[]): Promise<number> {
   const config = await loadConfig();
-  const saved = config.resume?.[resumeKeyFor(source)];
-  if (!saved || saved.offset <= 0 || saved.offset >= total) return 0;
+  const foundIndex = findResumeIndex(tracks, config.resume?.[resumeKeyFor(source)]);
+  if (foundIndex <= 0) return 0;
 
   const choice = await p.select({
-    message: t('review.resume.question', { current: saved.offset + 1, total: saved.total }),
+    message: t('review.resume.question', { current: foundIndex + 1, total: tracks.length }),
     options: [
-      { value: saved.offset, label: t('review.resume.continueOption') },
+      { value: foundIndex, label: t('review.resume.continueOption') },
       { value: 0, label: t('review.resume.startOverOption') },
     ],
   });
@@ -37,13 +63,14 @@ async function loadResumeOffset(source: TrackSource, total: number): Promise<num
   return p.isCancel(choice) ? 0 : choice;
 }
 
-async function saveResumeOffset(source: TrackSource, offset: number, total: number): Promise<void> {
+async function saveResumeOffset(source: TrackSource, tracks: TrackItem[], nextIndex: number): Promise<void> {
+  const state = nextResumeState(tracks, nextIndex);
   await updateConfig((c) => {
     c.resume ??= {};
-    if (offset >= total) {
-      delete c.resume[resumeKeyFor(source)];
+    if (state) {
+      c.resume[resumeKeyFor(source)] = state;
     } else {
-      c.resume[resumeKeyFor(source)] = { offset, total, updatedAt: new Date().toISOString() };
+      delete c.resume[resumeKeyFor(source)];
     }
   });
 }
@@ -98,7 +125,7 @@ export async function runReviewSession(
   }
   spinner.stop(t('review.loaded', { count: tracks.length }));
 
-  const startOffset = await loadResumeOffset(source, tracks.length);
+  const startOffset = await loadResumeOffset(source, tracks);
 
   const decisions = new Map<number, Decision>();
   const history: SessionHistoryEntry[] = [];
@@ -477,7 +504,7 @@ export async function runReviewSession(
     }
 
     view.index += 1;
-    await saveResumeOffset(source, view.index, tracks.length);
+    await saveResumeOffset(source, tracks, view.index);
     return false;
   }
 
@@ -494,7 +521,7 @@ export async function runReviewSession(
         } catch (error) {
           setStatus(t('review.unexpectedError', { message: (error as Error).message }), pc.red);
           view.index += 1;
-          await saveResumeOffset(source, view.index, tracks.length).catch(() => undefined);
+          await saveResumeOffset(source, tracks, view.index).catch(() => undefined);
         }
       }
 

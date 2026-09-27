@@ -13,9 +13,13 @@ export type Tokens = {
 };
 
 export type ResumeState = {
-  /** Index of the next track to review (0-based), within the order the API returned. */
-  offset: number;
-  total: number;
+  /**
+   * URI of the next not-yet-decided track, rather than a raw position index —
+   * a plain offset doesn't survive songs removed from the source between
+   * sessions (everything after a removal shifts one slot earlier), while a
+   * track's URI still identifies it wherever it now sits.
+   */
+  nextTrackUri: string;
   updatedAt: string;
 };
 
