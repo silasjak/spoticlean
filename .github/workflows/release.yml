@@ -27,7 +27,9 @@ jobs:
 
       # Trusted Publishing needs a recent npm CLI — the one bundled with the
       # setup-node action's Node 20 predates OIDC support, so bump it first.
-      - run: npm install -g npm@latest
+      # Pinned to the 11.x line, not `latest`: npm 12 dropped Node 20 support
+      # entirely, which would break this exact step on this exact runner.
+      - run: npm install -g npm@11
 
       # Re-verified here (not just trusted from CI on main) since a tag can
       # in principle be pushed from anywhere — this is the actual gate in
