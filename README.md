@@ -6,6 +6,11 @@ damit du schnell entscheiden kannst — und dann **behalten** oder
 **entfernen**.
 
 ![node](https://img.shields.io/badge/node-%3E%3D20-1DB954)
+[![CI](https://github.com/silasjak/spoticlean-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/silasjak/spoticlean-cli/actions/workflows/ci.yml)
+
+Verfügbar auf Deutsch und Englisch — wird beim Start automatisch anhand
+der Systemsprache erkannt (Fallback Englisch), lässt sich aber jederzeit
+umstellen (siehe [Sprache](#sprache)).
 
 ## Voraussetzungen
 
@@ -35,6 +40,9 @@ anfassen musst:
    `http://127.0.0.1:8888/callback`).
 3. Kopiere die **Client ID** aus den App-Einstellungen und gib sie in
    der CLI ein, wenn sie danach fragt (kein Secret nötig).
+
+`spoticlean setup` (siehe unten) fragt zusätzlich einmal die
+[Sprache](#sprache) ab, bevor es zu Port und Client ID kommt.
 
 Client ID, Port und Tokens werden danach automatisch lokal gespeichert
 (siehe [Konfiguration](#konfiguration)). Falls sich der Port mit etwas
@@ -71,8 +79,11 @@ Für die Entwicklung (ohne Build, mit Hot-Reload via tsx):
 npm run dev
 ```
 
-Beim ersten Start öffnet sich der Browser zur Spotify-Anmeldung. Danach
-wählst du eine deiner eigenen Playlisten oder „Liked Songs“ aus.
+Beim Start fragt `spoticlean` zuerst, ob du eine Playlist aufräumen oder
+die [Einstellungen](#einstellungen) öffnen willst. Bei "Playlist
+aufräumen" öffnet sich beim allerersten Mal der Browser zur
+Spotify-Anmeldung, danach wählst du eine deiner eigenen Playlisten oder
+„Liked Songs“ aus.
 
 ## Bedienung
 
@@ -82,16 +93,18 @@ kein Popup, kein `?` nötig. Dein normales Terminal-Scrollback bleibt
 unberührt und ist nach dem Beenden wieder da.
 
 Pro Song wird sofort versucht, an einer geschätzten Refrain-Stelle
-(~40 % der Songlänge) auf deinem aktiven Spotify-Gerät abzuspielen.
+(~40 % der Songlänge) auf deinem aktiven Spotify-Gerät abzuspielen; eine
+Fortschrittsleiste (elapsed/gesamt) zeigt dabei live die Position und
+tickt von selbst weiter, auch ohne jede Taste zu drücken.
 
 | Taste            | Aktion                                          |
 | ----------------- | ------------------------------------------------ |
 | `Enter` / `k`     | **Keep** — Song bleibt in der Playlist            |
 | `⌫` (Backspace) / `r` | **Remove** — Song wird sofort entfernt        |
 | `↑` / `↓`         | Verlauf durchblättern (siehe unten)               |
-| `u`               | Undo — letzte Entscheidung zurücknehmen           |
+| `u`               | Letzte Entscheidung korrigieren (Shortcut für "Verlauf öffnen" auf den letzten Eintrag) |
 | `Leertaste`       | Pause / Weiter                                    |
-| `,` / `.`         | 10s zurück / vor                                  |
+| `←` / `→`         | 10s zurück / vor                                  |
 | `b`               | Zurück zum geschätzten Refrain-Einstieg           |
 | `o`               | Song in Spotify öffnen (App/Web)                  |
 | `q` / `Strg+C`    | Beenden — Fortschritt wird gespeichert            |
@@ -99,8 +112,11 @@ Pro Song wird sofort versucht, an einer geschätzten Refrain-Stelle
 Entfernen passiert **sofort** über die Spotify-API (kein Sammel-Commit am
 Ende), `u` macht das zuverlässig rückgängig (Song wird wieder
 hinzugefügt). Der Fortschritt (welcher Song als nächstes kommt) wird
-lokal gespeichert — brichst du ab, kannst du beim nächsten Start dort
-weitermachen.
+lokal gespeichert, anhand des Songs selbst statt einer reinen Position —
+brichst du ab und entfernst zwischenzeitlich (in einer anderen Session)
+Songs davor, macht `spoticlean` beim nächsten Start trotzdem exakt beim
+richtigen Song weiter, statt bei einer verschobenen Zählposition zu
+landen.
 
 ### Im Verlauf blättern und einen älteren Song neu entscheiden
 
@@ -120,16 +136,47 @@ machen (nicht nur eine einzelne, beliebig weit zurückliegende), ist
 dafür weiterhin mehrfaches `u` gedacht — das räumt der Reihe nach die
 letzten Entscheidungen ab, unabhängig vom Verlauf-Browser.
 
+## Sprache
+
+Beim ersten Start wird die Sprache automatisch anhand der Systemsprache
+gewählt (aktuell Deutsch oder Englisch, sonst Englisch als Fallback).
+Umstellen geht jederzeit über `spoticlean setup` (erster Schritt) oder
+über [Einstellungen](#einstellungen) im Hauptmenü — beides wirkt sofort,
+auch mitten im gerade laufenden Vorgang.
+
+## Einstellungen
+
+Über den Menüpunkt "Einstellungen" beim Start öffnet sich ein eigener
+Vollbild-Screen für Sprache, Port und Client ID — ohne den kompletten
+`spoticlean setup`-Assistenten erneut durchlaufen zu müssen:
+
+- `↑` / `↓` wechselt das fokussierte Feld.
+- Bei Sprache: `←` / `→` schaltet direkt um, mit sofortiger Vorschau im
+  ganzen Screen.
+- Bei Port / Client ID: `Enter` öffnet das Feld zum Bearbeiten (Tippen,
+  `⌫`, `Enter` übernimmt, `Esc` verwirft nur dieses Feld). Die
+  Redirect-URI-Zeile unter Port aktualisiert sich dabei live.
+- `s` speichert **alle** Änderungen auf einmal; bis dahin ist nichts
+  geschrieben. `Esc` (außerhalb eines gerade bearbeiteten Feldes) verwirft
+  den kompletten Entwurf, inklusive einer nur vorgeschauten Sprache.
+- Client ID ändern setzt die gespeicherte Anmeldung zurück (neue
+  Client ID = neue Spotify-App, der alte Token passt nicht mehr) — beim
+  nächsten Start ist dann eine erneute Anmeldung nötig.
+
+`spoticlean setup` bleibt daneben bestehen: der einmalige, lineare
+Assistent, der alle drei Werte nacheinander abfragt und nicht
+weiterlässt, bevor sie gesetzt sind (u. a. für die erste Einrichtung).
+
 ## Konfiguration
 
-Client ID, Tokens und Fortschritt liegen lokal unter:
+Client ID, Sprache, Tokens und Fortschritt liegen lokal unter:
 
 - Linux: `~/.config/spoticlean-cli/config.json`
 - macOS: `~/Library/Preferences/spoticlean-cli/config.json`
 - Windows: `%APPDATA%\spoticlean-cli\Config\config.json`
 
 ```bash
-spoticlean setup    # Client ID / Port neu einrichten
+spoticlean setup    # Sprache / Client ID / Port neu einrichten
 spoticlean logout   # gespeicherte Anmeldung entfernen
 ```
 
@@ -147,7 +194,7 @@ Anhören) beurteilen.
 
 Die „Refrain-Position“ ist eine grobe Heuristik (40 % der Songlänge),
 keine echte Musikanalyse — bei ungewöhnlichen Songstrukturen also
-einfach mit `,`/`.`/`b` nachjustieren.
+einfach mit `←`/`→`/`b` nachjustieren.
 
 ## Nutzung durch andere Personen
 
@@ -222,7 +269,10 @@ achten, falls das relevant ist.
 npm run typecheck
 npm run lint
 npm test
+npm run build
 ```
+
+Läuft automatisch bei jedem Push/PR über [GitHub Actions](.github/workflows/ci.yml).
 
 ## Lizenz
 
