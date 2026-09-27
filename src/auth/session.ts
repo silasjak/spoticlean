@@ -4,24 +4,17 @@ import open from 'open';
 
 import { loadConfig, updateConfig, type Tokens } from '../config.js';
 import { AuthCancelled } from '../errors.js';
-import { detectLanguage, initI18n, t, type SupportedLanguage } from '../i18n/index.js';
+import { LANGUAGE_NAMES, detectLanguage, initI18n, t, type SupportedLanguage } from '../i18n/index.js';
 import { waitForAuthorizationCode } from './callbackServer.js';
 import { buildAuthorizeUrl, exchangeCodeForTokens, redirectUriFor, refreshTokens } from './oauth.js';
 import { createCodeChallenge, createCodeVerifier, createState } from './pkce.js';
 
-const DEFAULT_PORT = 8888;
+export const DEFAULT_PORT = 8888;
 /** Refresh a bit before actual expiry to avoid racing a request against it. */
 const EXPIRY_SAFETY_MARGIN_MS = 60_000;
 
-/**
- * Every user needs their own free Spotify app (just a Client ID — no
- * secret, since this uses PKCE). That's unavoidable: Spotify doesn't
- * offer an API to create dashboard apps on someone's behalf, it's a
- * one-time manual step on Spotify's own website. Everything past that
- * point (this prompt included) is handled entirely by the CLI, no config
- * files to hand-edit.
- */
-async function promptAppSetup(defaultPort: number): Promise<{ clientId: string; port: number }> {
+/** Just the port prompt/validation — split out from `promptAppSetup` so settings.ts can offer it standalone, without re-explaining the Client ID dance every time. */
+export async function promptPort(defaultPort: number): Promise<number> {
   const portInput = await p.text({
     message: t('auth.setup.portQuestion'),
     initialValue: String(defaultPort),
@@ -32,8 +25,18 @@ async function promptAppSetup(defaultPort: number): Promise<{ clientId: string; 
     },
   });
   if (p.isCancel(portInput)) throw new AuthCancelled();
-  const port = Number(portInput);
+  return Number(portInput);
+}
 
+/**
+ * The "go create a Spotify app, use this exact redirect URI" instructions —
+ * every user needs their own free app (just a Client ID, no secret, since
+ * this uses PKCE); Spotify has no API to create dashboard apps on someone's
+ * behalf, so this one-time step can only ever be "go do this on their
+ * website ourselves". Also the right reminder whenever *only* the port
+ * changes later (settings.ts): the dashboard's redirect URI has to match it.
+ */
+export function printAppSetupNote(port: number): void {
   p.log.step(t('auth.setup.appNeededStep'));
   p.note(
     [
@@ -44,25 +47,34 @@ async function promptAppSetup(defaultPort: number): Promise<{ clientId: string; 
     ].join('\n'),
     t('auth.setup.noteTitle')
   );
+}
 
+/** Just the Client ID prompt/validation — split out for the same reason as `promptPort`. */
+export async function promptClientId(): Promise<string> {
   const clientId = await p.text({
     message: t('auth.setup.clientIdQuestion'),
     validate: (value) => (value.trim().length === 0 ? t('auth.setup.clientIdValidation') : undefined),
   });
   if (p.isCancel(clientId)) throw new AuthCancelled();
+  return clientId.trim();
+}
 
-  return { clientId: clientId.trim(), port };
+async function promptAppSetup(defaultPort: number): Promise<{ clientId: string; port: number }> {
+  const port = await promptPort(defaultPort);
+  printAppSetupNote(port);
+  const clientId = await promptClientId();
+  return { clientId, port };
 }
 
 /** Offers Deutsch/English (each shown in its own name, not translated — the standard convention for a language picker) and persists + activates the choice right away. */
-async function promptLanguage(current: SupportedLanguage): Promise<SupportedLanguage> {
+export async function promptLanguage(current: SupportedLanguage): Promise<SupportedLanguage> {
   const choice = await p.select({
     message: t('auth.setup.languageQuestion'),
     initialValue: current,
-    options: [
-      { value: 'de' as const, label: 'Deutsch' },
-      { value: 'en' as const, label: 'English' },
-    ],
+    options: (Object.entries(LANGUAGE_NAMES) as [SupportedLanguage, string][]).map(([value, label]) => ({
+      value,
+      label,
+    })),
   });
   if (p.isCancel(choice)) throw new AuthCancelled();
   return choice;

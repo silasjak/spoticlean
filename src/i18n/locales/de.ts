@@ -6,6 +6,7 @@
 const de = {
   common: {
     cancelled: 'Abgebrochen.',
+    needsTty: 'spoticlean braucht ein interaktives Terminal (TTY), um Tasten lesen zu können.',
   },
   cli: {
     summary: {
@@ -20,6 +21,11 @@ const de = {
     setupReady: 'Bereit! ✨',
     outroDone: 'Fertig! ✨',
     debugModeOn: 'Debug-Modus an — Requests/Responses landen in: {{path}}',
+    mainMenu: {
+      question: 'Was möchtest du tun?',
+      reviewOption: 'Playlist aufräumen',
+      settingsOption: 'Einstellungen',
+    },
     help: {
       noCommandLabel: '(kein Befehl)',
       noCommandDesc: 'Playlist aufräumen (fragt bei Erstnutzung automatisch nach Setup)',
@@ -97,7 +103,6 @@ const de = {
       continueOption: 'Fortsetzen',
       startOverOption: 'Von vorne beginnen',
     },
-    needsTty: 'spoticlean braucht ein interaktives Terminal (TTY), um Tasten lesen zu können.',
     loading: 'Lade Songs aus "{{name}}"…',
     loadingProgress: 'Lade Songs aus "{{name}}"… ({{loaded}}/{{total}})',
     loadFailed: 'Laden von "{{name}}" fehlgeschlagen.',
@@ -141,6 +146,25 @@ const de = {
       openAndCorrect: 'öffnen & korrigieren',
       cancel: 'abbrechen',
     },
+  },
+  settings: {
+    title: 'Einstellungen',
+    fields: {
+      language: 'Sprache',
+      port: 'Port',
+      clientId: 'Client ID',
+      redirectUri: 'Redirect URI',
+    },
+    hints: {
+      navigate: 'auswählen',
+      edit: 'bearbeiten',
+      toggleLanguage: 'Sprache wechseln',
+      save: 'speichern',
+      discard: 'verwerfen',
+      confirmEdit: 'übernehmen',
+      cancelEdit: 'abbrechen',
+    },
+    clientIdChanged: 'Client ID geändert — beim nächsten Start ist eine erneute Anmeldung nötig.',
   },
   spotify: {
     tracks: {

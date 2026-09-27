@@ -5,6 +5,7 @@ import type { Translations } from './de.js';
 const en: Translations = {
   common: {
     cancelled: 'Cancelled.',
+    needsTty: 'spoticlean needs an interactive terminal (TTY) to read key presses.',
   },
   cli: {
     summary: {
@@ -19,6 +20,11 @@ const en: Translations = {
     setupReady: 'Ready! ✨',
     outroDone: 'Done! ✨',
     debugModeOn: 'Debug mode on — requests/responses go to: {{path}}',
+    mainMenu: {
+      question: 'What would you like to do?',
+      reviewOption: 'Clean up a playlist',
+      settingsOption: 'Settings',
+    },
     help: {
       noCommandLabel: '(no command)',
       noCommandDesc: 'Clean up a playlist (walks you through setup automatically on first run)',
@@ -96,7 +102,6 @@ const en: Translations = {
       continueOption: 'Continue',
       startOverOption: 'Start over',
     },
-    needsTty: 'spoticlean needs an interactive terminal (TTY) to read key presses.',
     loading: 'Loading songs from "{{name}}"…',
     loadingProgress: 'Loading songs from "{{name}}"… ({{loaded}}/{{total}})',
     loadFailed: 'Loading "{{name}}" failed.',
@@ -140,6 +145,25 @@ const en: Translations = {
       openAndCorrect: 'open & correct',
       cancel: 'cancel',
     },
+  },
+  settings: {
+    title: 'Settings',
+    fields: {
+      language: 'Language',
+      port: 'Port',
+      clientId: 'Client ID',
+      redirectUri: 'Redirect URI',
+    },
+    hints: {
+      navigate: 'select',
+      edit: 'edit',
+      toggleLanguage: 'change language',
+      save: 'save',
+      discard: 'discard',
+      confirmEdit: 'confirm',
+      cancelEdit: 'cancel',
+    },
+    clientIdChanged: "Client ID changed — you'll need to sign in again next time.",
   },
   spotify: {
     tracks: {

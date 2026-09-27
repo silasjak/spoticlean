@@ -11,6 +11,13 @@ import { buildReviewFrame, type Decision, type HistoryEntry } from './reviewFram
 // whoever's machine/CI runs this.
 await initI18n('de');
 
+// eslint-disable-next-line no-control-regex -- deliberately matching the ESC control character to strip ANSI color codes
+const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
+/** Strips ANSI color codes so a content assertion doesn't have to account for exactly which ones sit between characters. */
+function stripAnsi(text: string): string {
+  return text.replace(ANSI_PATTERN, '');
+}
+
 function makeTrack(name: string, overrides: Partial<SpotifyTrack> = {}): SpotifyTrack {
   return {
     id: name,
@@ -164,10 +171,22 @@ test('the status message appears in the frame', () => {
 });
 
 test('shows a playback progress bar in the status row when there is a device and no status message', () => {
-  const frame = buildReviewFrame(baseState({ positionMs: 90_000 })).join('\n');
+  const frame = stripAnsi(buildReviewFrame(baseState({ positionMs: 90_000 })).join('\n'));
   // makeItem()'s track is 180_000ms — 90_000ms in is exactly halfway, and
   // formatDuration renders it "1:30" of "3:00".
   assert.match(frame, /1:30 █+░+ 3:00/);
+});
+
+test('the filled part of the progress bar and the track title get the brand-green accent', () => {
+  const frame = buildReviewFrame(baseState({ positionMs: 90_000 })).join('\n');
+  const greenEscape = '\x1b[38;2;29;185;84m';
+  const titleLine = frame.split('\n').find((l) => l.includes('Ein Song'));
+  const barLine = frame.split('\n').find((l) => l.includes('█'));
+  assert.ok(titleLine?.includes(greenEscape), 'expected the track title to use the brand-green escape code');
+  assert.ok(barLine?.includes(greenEscape), 'expected the filled bar segment to use the brand-green escape code');
+  // The empty (unfilled) segment must stay dim, not also turn green.
+  const filledThenEmpty = barLine!.indexOf(greenEscape) < barLine!.indexOf('░');
+  assert.ok(filledThenEmpty);
 });
 
 test('a status message replaces the progress bar rather than both showing', () => {

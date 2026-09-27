@@ -14,6 +14,8 @@ declare module 'i18next' {
 
 export type SupportedLanguage = 'de' | 'en';
 export const SUPPORTED_LANGUAGES: readonly SupportedLanguage[] = ['de', 'en'];
+/** Each language's own name for itself — shown as-is in a language picker, never run through t(). */
+export const LANGUAGE_NAMES: Record<SupportedLanguage, string> = { de: 'Deutsch', en: 'English' };
 const FALLBACK_LANGUAGE: SupportedLanguage = 'en';
 
 function isSupported(lang: string): lang is SupportedLanguage {

@@ -1,16 +1,13 @@
-import pc from 'picocolors';
-
 import { t } from '../i18n/index.js';
-import { visibleLength } from './terminal.js';
+import { packKeyHints, type KeyHint } from './hintLine.js';
 
-type KeyHint = { key: string; desc: string; requiresDevice?: boolean };
 export type HintMode = 'review' | 'browse' | 'edit';
 
 // Built as functions (not module-level constants) so `desc` picks up the
 // active language at render time — i18n only initializes once cli.ts's
 // main() runs, which is after this module is first imported.
 
-function reviewHints(): KeyHint[] {
+function reviewHints(): (KeyHint & { requiresDevice?: boolean })[] {
   return [
     { key: '⏎/k', desc: t('review.hints.keep') },
     { key: '⌫/r', desc: t('review.hints.remove') },
@@ -25,7 +22,7 @@ function reviewHints(): KeyHint[] {
 }
 
 /** Shown instead of reviewHints() while a history entry is highlighted (browsing mode, not yet committed to reopening it). */
-function browseHints(): KeyHint[] {
+function browseHints(): (KeyHint & { requiresDevice?: boolean })[] {
   return [
     { key: '↑/↓', desc: t('review.hints.select') },
     { key: '⏎', desc: t('review.hints.openAndCorrect') },
@@ -39,7 +36,7 @@ function browseHints(): KeyHint[] {
  * playback) is in play; everything else keeps its original decision and the
  * session returns to where it was once this is confirmed or cancelled.
  */
-function editHints(): KeyHint[] {
+function editHints(): (KeyHint & { requiresDevice?: boolean })[] {
   return [
     { key: '⏎/k', desc: t('review.hints.keep') },
     { key: '⌫/r', desc: t('review.hints.remove') },
@@ -51,32 +48,13 @@ function editHints(): KeyHint[] {
   ];
 }
 
-const SEPARATOR = '   ';
-
-function renderHint(hint: KeyHint): string {
-  return `${pc.bold(pc.cyan(hint.key))} ${pc.dim(hint.desc)}`;
-}
-
 /**
- * Packs the key legend into as few lines as fit `maxWidth`, wrapping to a
- * second (or third) line on a narrow terminal instead of overflowing.
+ * Packs the review screen's key legend into as few lines as fit `maxWidth`,
+ * wrapping to a second (or third) line on a narrow terminal instead of
+ * overflowing.
  */
 export function buildKeyHintLines(hasDevice: boolean, maxWidth: number, mode: HintMode = 'review'): string[] {
   const source = mode === 'browse' ? browseHints() : mode === 'edit' ? editHints() : reviewHints();
   const hints = source.filter((hint) => hasDevice || !hint.requiresDevice);
-  const lines: string[] = [];
-  let current = '';
-
-  for (const hint of hints) {
-    const rendered = renderHint(hint);
-    const candidate = current ? `${current}${SEPARATOR}${rendered}` : rendered;
-    if (current && visibleLength(candidate) > maxWidth) {
-      lines.push(current);
-      current = rendered;
-    } else {
-      current = candidate;
-    }
-  }
-  if (current) lines.push(current);
-  return lines.length > 0 ? lines : [''];
+  return packKeyHints(hints, maxWidth);
 }

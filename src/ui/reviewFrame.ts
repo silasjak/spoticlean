@@ -2,6 +2,7 @@ import pc from 'picocolors';
 
 import { t } from '../i18n/index.js';
 import type { SpotifyTrack, TrackItem } from '../spotify/types.js';
+import { spotifyGreen } from './brand.js';
 import { boxBlank, boxBottom, boxDivider, boxLine, boxTop, fitWidth, innerWidth } from './box.js';
 import { formatAddedAt, formatArtists, formatDuration } from './format.js';
 import { buildKeyHintLines } from './keyHints.js';
@@ -34,14 +35,15 @@ export type ReviewFrameState = {
 
 const identity = (text: string) => text;
 
-/** A "0:35 ███████░░░░░░░░░░░░ 3:20" bar, sized to fill exactly `width` columns. */
+/** A "0:35 ███████░░░░░░░░░░░░ 3:20" bar, sized to fill exactly `width` columns — the filled portion accented in brand green, the rest dim. */
 function buildProgressBar(positionMs: number, durationMs: number, width: number): string {
   const elapsed = formatDuration(positionMs);
   const total = formatDuration(durationMs);
   const barWidth = Math.max(0, width - elapsed.length - total.length - 2);
   const ratio = durationMs > 0 ? Math.min(1, Math.max(0, positionMs / durationMs)) : 0;
   const filled = Math.round(ratio * barWidth);
-  return `${elapsed} ${'█'.repeat(filled)}${'░'.repeat(barWidth - filled)} ${total}`;
+  const bar = spotifyGreen('█'.repeat(filled)) + pc.dim('░'.repeat(barWidth - filled));
+  return `${pc.dim(elapsed)} ${bar} ${pc.dim(total)}`;
 }
 
 /** Keeps `cursor` inside the visible window, centering on it once the list no longer fits. */
@@ -87,7 +89,7 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
 
   const card: string[] = [boxBlank(width)];
   if (track && item) {
-    card.push(boxLine(pc.bold(fitWidth(track.name, width)), width));
+    card.push(boxLine(spotifyGreen(pc.bold(fitWidth(track.name, width))), width));
     card.push(boxLine(pc.dim(fitWidth(`${formatArtists(track)} · ${track.album.name}`, width)), width));
     card.push(
       boxLine(
@@ -116,7 +118,7 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
   // startPlayback()).
   const canShowProgress = Boolean(track) && hasDevice && !track!.is_local;
   const progressBar = canShowProgress
-    ? pc.dim(`${isPaused ? '⏸' : '▶'} ${buildProgressBar(positionMs, track!.duration_ms, innerWidth(width) - 2)}`)
+    ? `${pc.dim(isPaused ? '⏸' : '▶')} ${buildProgressBar(positionMs, track!.duration_ms, innerWidth(width) - 2)}`
     : '';
   card.push(boxLine(status ? (status.color ?? identity)(fitWidth(status.text, width)) : progressBar, width));
   card.push(boxBlank(width));

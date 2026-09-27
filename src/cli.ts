@@ -10,6 +10,7 @@ import { printBanner } from './ui/banner.js';
 import { prepareDevice } from './ui/device.js';
 import { runReviewSession } from './ui/reviewSession.js';
 import { selectSource } from './ui/selectSource.js';
+import { runSettingsMenu } from './ui/settings.js';
 
 function printSummary(summary: Awaited<ReturnType<typeof runReviewSession>>): void {
   const lines = [
@@ -105,6 +106,26 @@ export async function main(argv: string[]): Promise<void> {
   }
 
   try {
+    // "spoticlean setup" is the one-time, everything-must-be-set wizard;
+    // this is the lightweight everyday way back into any one of those same
+    // values — offered right here so it's never more than one extra prompt
+    // away, not a separate command to remember.
+    for (;;) {
+      const action = await p.select({
+        message: t('cli.mainMenu.question'),
+        options: [
+          { value: 'review' as const, label: t('cli.mainMenu.reviewOption') },
+          { value: 'settings' as const, label: t('cli.mainMenu.settingsOption') },
+        ],
+      });
+      if (p.isCancel(action)) {
+        p.cancel(t('common.cancelled'));
+        return;
+      }
+      if (action === 'review') break;
+      await runSettingsMenu();
+    }
+
     const { source } = await selectSource();
     const deviceId = await prepareDevice();
     const summary = await runReviewSession(source, deviceId);

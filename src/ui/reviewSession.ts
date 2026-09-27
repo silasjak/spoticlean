@@ -103,7 +103,7 @@ export async function runReviewSession(
   deviceId: string | undefined
 ): Promise<ReviewSummary> {
   if (!isInteractiveTerminal()) {
-    throw new Error(t('review.needsTty'));
+    throw new Error(t('common.needsTty'));
   }
 
   // Loading + resume choice still happen in the normal scrollback via clack —
