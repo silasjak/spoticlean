@@ -15,6 +15,16 @@ und dann **behalten** oder **entfernen**.
   Web-Player) — ohne das funktioniert das Aufräumen trotzdem, nur ohne
   automatischen Sofort-Refrain.
 
+## Installation
+
+```bash
+npm install
+npm run build
+npm link
+```
+
+Für die Entwicklung (ohne Build, mit Hot-Reload): `npm run dev`.
+
 ## Setup
 
 Diese App nutzt OAuth **Authorization Code + PKCE** — du brauchst nur
@@ -26,25 +36,10 @@ Schritt auf Spotifys eigener Seite (dafür gibt's keine API):
 2. Trage als Redirect URI `http://127.0.0.1:8888/callback` ein (Port
    anpassen, falls du beim Start einen anderen als den Standard `8888`
    wählst).
-3. Starte `spoticlean` (siehe unten) — Client-ID-Eingabe, Login und
-   Sprachwahl führt die CLI selbst interaktiv durch.
+3. Starte `spoticlean` — Client-ID-Eingabe, Login und Sprachwahl führt
+   die CLI selbst interaktiv durch.
 
 Manuelles Setzen der Werte analog `.env.example` ist auch möglich.
-
-## Installation & Start
-
-```bash
-npm install
-npm run build
-npm link
-spoticlean
-```
-
-Für die Entwicklung (ohne Build, mit Hot-Reload):
-
-```bash
-npm run dev
-```
 
 Die Bedienung (Tastenkürzel, Verlauf, Einstellungen, Debug-Modus, …)
 erschließt sich beim Ausprobieren von selbst — die Tastenleiste ist immer
