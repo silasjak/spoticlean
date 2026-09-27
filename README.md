@@ -1,8 +1,8 @@
 # spoticlean
 
-Interactive command-line app to clean up your Spotify playlists (and your
-"Liked Songs"): listen to a song — jumping straight to the chorus if
-possible — then **keep** or **remove** it.
+Interactive CLI to clean up your Spotify playlists (and your "Liked
+Songs"): listen to a song — jumping straight to the chorus if possible —
+then **keep** or **remove** it.
 
 ![node](https://img.shields.io/badge/node-%3E%3D20-1DB954)
 [![CI](https://github.com/silasjak/spoticlean/actions/workflows/ci.yml/badge.svg)](https://github.com/silasjak/spoticlean/actions/workflows/ci.yml)
@@ -17,12 +17,16 @@ possible — then **keep** or **remove** it.
 ## Installation
 
 ```bash
-npm install
-npm run build
-npm link
+npm install -g spoticlean
 ```
 
-For development (no build, with hot reload): `npm run dev`.
+This keeps a persistent config file between runs (your Client ID, login,
+and settings), so a proper install is recommended over running it via
+`npx` each time. If you'd rather not install anything permanently:
+
+```bash
+npx spoticlean
+```
 
 ## Setup
 
@@ -42,6 +46,16 @@ Setting the values manually, similar to `.env.example`, also works.
 The rest (keyboard shortcuts, history, settings, debug mode, …) is
 discoverable just by trying it — the key bar is always visible, and
 `spoticlean help` lists everything else.
+
+## Development
+
+```bash
+npm install
+npm run build
+npm link
+```
+
+For development (no build, with hot reload): `npm run dev`.
 
 ## License
 
