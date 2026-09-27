@@ -158,6 +158,7 @@ export async function runReviewSession(
 
     if (hasDevice && reason && SESSION_ENDING_REASONS.has(reason)) {
       hasDevice = false;
+      stopTicking();
       setStatus(
         t(reason === 'PREMIUM_REQUIRED' ? 'review.playback.premiumRequired' : 'review.playback.noDevice'),
         pc.yellow
@@ -174,6 +175,30 @@ export async function runReviewSession(
   enterAltScreen();
   process.stdout.on('resize', onResize);
 
+  // view.positionMs otherwise only ever moved on an explicit action (seek,
+  // pause, a new track starting) — it went stale the moment you just sat and
+  // listened, so the position line/progress bar appeared frozen, and a later
+  // seek would then jump from that stale spot instead of roughly where
+  // playback actually was. This ticks it forward once a second instead,
+  // while a track is actually playing.
+  let tickTimer: NodeJS.Timeout | undefined;
+
+  function stopTicking(): void {
+    if (tickTimer) {
+      clearInterval(tickTimer);
+      tickTimer = undefined;
+    }
+  }
+
+  function startTicking(durationMs: number): void {
+    stopTicking();
+    tickTimer = setInterval(() => {
+      if (view.isPaused) return;
+      view.positionMs = Math.min(durationMs, view.positionMs + 1000);
+      render();
+    }, 1000);
+  }
+
   // Starts (or restarts) chorus-first playback for `track`, currently shown
   // at view.index, and renders. Shared between entering a track normally and
   // resuming the original track after a history-browser detour. Also clears
@@ -188,10 +213,13 @@ export async function runReviewSession(
     render();
 
     if (hasDevice && !track.is_local) {
+      startTicking(track.duration_ms);
       // Awaited (not fire-and-forget): a pause/seek pressed while this is
       // still in flight would race it and produce spurious errors.
       await safePlayback(() => playTrackAt(track.uri, view.positionMs, deviceId), onPlaybackError);
       render();
+    } else {
+      stopTicking();
     }
   }
 
@@ -475,6 +503,7 @@ export async function runReviewSession(
       }
     });
   } finally {
+    stopTicking();
     process.stdout.off('resize', onResize);
     exitAltScreen();
   }

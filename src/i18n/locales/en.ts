@@ -122,7 +122,6 @@ const en: Translations = {
       title: 'spoticlean · {{source}} · Track {{current}}/{{total}}',
       addedOn: 'added on {{date}}',
       localFile: 'Local file — playback via Spotify Connect not possible.',
-      positionFrom: 'at {{time}}',
       beingCorrected: ' (being corrected)',
       noDecisionsYet: 'No decisions yet.',
       historyTitle: 'History',

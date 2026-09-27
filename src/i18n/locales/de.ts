@@ -123,7 +123,6 @@ const de = {
       title: 'spoticlean · {{source}} · Track {{current}}/{{total}}',
       addedOn: 'hinzugefügt am {{date}}',
       localFile: 'Lokale Datei — kein Abspielen über Spotify Connect möglich.',
-      positionFrom: 'ab {{time}}',
       beingCorrected: ' (wird korrigiert)',
       noDecisionsYet: 'Noch keine Entscheidungen.',
       historyTitle: 'Verlauf',

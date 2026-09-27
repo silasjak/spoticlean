@@ -102,23 +102,22 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
     );
     if (track.is_local) {
       card.push(boxLine(pc.dim(t('review.frame.localFile')), width));
-    } else if (hasDevice) {
-      card.push(
-        boxLine(
-          pc.dim(`${isPaused ? '⏸' : '▶'} ${t('review.frame.positionFrom', { time: formatDuration(positionMs) })}`),
-          width
-        )
-      );
     }
   }
   // Always exactly one status/progress row (blank when neither applies) so
   // the card doesn't change height depending on what's showing. A status
   // message always wins — it's meant to be noticed, and a wrong/failed
   // action is more important right now than where playback is — so the bar
-  // is simply not visible for as long as one is up; it comes back on its own
-  // once the message is replaced or cleared (see startPlayback()).
+  // (and the pause/play icon, folded in here rather than its own line — a
+  // separate "ab/at ..." position line reads as a fixed starting point that
+  // seeking then confusingly "changes", where the bar unambiguously means
+  // current position) is simply not visible for as long as a message is up;
+  // it comes back on its own once that's replaced or cleared (see
+  // startPlayback()).
   const canShowProgress = Boolean(track) && hasDevice && !track!.is_local;
-  const progressBar = canShowProgress ? pc.dim(buildProgressBar(positionMs, track!.duration_ms, innerWidth(width))) : '';
+  const progressBar = canShowProgress
+    ? pc.dim(`${isPaused ? '⏸' : '▶'} ${buildProgressBar(positionMs, track!.duration_ms, innerWidth(width) - 2)}`)
+    : '';
   card.push(boxLine(status ? (status.color ?? identity)(fitWidth(status.text, width)) : progressBar, width));
   card.push(boxBlank(width));
 
