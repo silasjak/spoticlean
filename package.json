@@ -1,6 +1,6 @@
 {
   "name": "spoticlean",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Interactive CLI to clean up your Spotify playlists and Liked Songs — hear the chorus instantly, then keep or remove.",
   "type": "module",
   "license": "MIT",
