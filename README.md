@@ -1,11 +1,11 @@
-# spoticlean-cli
+# spoticlean
 
 Interaktive Kommandozeilen-App, um deine Spotify-Playlisten (und deine
 „Liked Songs“) aufzuräumen: Song anhören — möglichst direkt am Refrain —
 und dann **behalten** oder **entfernen**.
 
 ![node](https://img.shields.io/badge/node-%3E%3D20-1DB954)
-[![CI](https://github.com/silasjak/spoticlean-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/silasjak/spoticlean-cli/actions/workflows/ci.yml)
+[![CI](https://github.com/silasjak/spoticlean/actions/workflows/ci.yml/badge.svg)](https://github.com/silasjak/spoticlean/actions/workflows/ci.yml)
 
 ## Voraussetzungen
 

@@ -10,7 +10,7 @@ export type CallbackResult = {
 // language is active when the callback actually fires, not whatever it was
 // at import time (before cli.ts's main() has initialized i18n).
 const successHtml = () => `<!doctype html>
-<html lang="${currentLanguage()}"><head><meta charset="utf-8"><title>spoticlean-cli</title>
+<html lang="${currentLanguage()}"><head><meta charset="utf-8"><title>spoticlean</title>
 <style>
   body { background:#121212; color:#eaeaea; font-family: system-ui, sans-serif;
          display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
@@ -24,7 +24,7 @@ const successHtml = () => `<!doctype html>
 </div></body></html>`;
 
 const errorHtml = (message: string) => `<!doctype html>
-<html lang="${currentLanguage()}"><head><meta charset="utf-8"><title>spoticlean-cli</title>
+<html lang="${currentLanguage()}"><head><meta charset="utf-8"><title>spoticlean</title>
 <style>
   body { background:#121212; color:#eaeaea; font-family: system-ui, sans-serif;
          display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }

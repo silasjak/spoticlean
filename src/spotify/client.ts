@@ -55,7 +55,7 @@ async function request<T>(path: string, options: RequestOptions = {}, attempt = 
       // filters (proxies, WAFs) treat that as bot-like and block the
       // request with a bare, content-less 403 before it ever reaches
       // Spotify's own API logic.
-      'User-Agent': 'spoticlean-cli (+https://github.com/silasjak/spoticlean-cli)',
+      'User-Agent': 'spoticlean (+https://github.com/silasjak/spoticlean)',
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
     },
     body: options.body ? JSON.stringify(options.body) : undefined,

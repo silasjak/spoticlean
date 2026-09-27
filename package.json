@@ -1,13 +1,32 @@
 {
-  "name": "spoticlean-cli",
-  "version": "0.1.0",
+  "name": "spoticlean",
+  "version": "1.0.0",
   "description": "Interactive CLI to clean up your Spotify playlists and Liked Songs — hear the chorus instantly, then keep or remove.",
   "type": "module",
-  "private": true,
   "license": "MIT",
-  "bin": {
-    "spoticlean": "./dist/index.js"
+  "author": "silasjak <mail@silasjak.dev>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/silasjak/spoticlean.git"
   },
+  "bugs": {
+    "url": "https://github.com/silasjak/spoticlean/issues"
+  },
+  "homepage": "https://github.com/silasjak/spoticlean#readme",
+  "keywords": [
+    "spotify",
+    "cli",
+    "playlist",
+    "liked-songs",
+    "music",
+    "interactive"
+  ],
+  "bin": {
+    "spoticlean": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
   "engines": {
     "node": ">=20"
   },
@@ -18,7 +37,8 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "FORCE_COLOR=1 tsx --test src/**/*.test.ts"
+    "test": "FORCE_COLOR=1 tsx --test src/**/*.test.ts",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm test && npm run build"
   },
   "dependencies": {
     "@clack/prompts": "^0.9.1",

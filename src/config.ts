@@ -33,7 +33,7 @@ export type StoredConfig = {
   language?: SupportedLanguage;
 };
 
-const paths = envPaths('spoticlean-cli', { suffix: '' });
+const paths = envPaths('spoticlean', { suffix: '' });
 const configFile = path.join(paths.config, 'config.json');
 
 let cache: StoredConfig | undefined;

@@ -79,7 +79,7 @@ export async function main(argv: string[]): Promise<void> {
 
   if (command === 'setup') {
     printBanner();
-    p.intro(pc.bgGreen(pc.black(' spoticlean-cli setup ')));
+    p.intro(pc.bgGreen(pc.black(' spoticlean setup ')));
     try {
       await runSetup();
       p.outro(pc.green(t('cli.setupReady')));
@@ -99,7 +99,7 @@ export async function main(argv: string[]): Promise<void> {
   }
 
   printBanner();
-  p.intro(pc.bgGreen(pc.black(' spoticlean-cli ')));
+  p.intro(pc.bgGreen(pc.black(' spoticlean ')));
 
   if (isDebugEnabled()) {
     p.log.info(t('cli.debugModeOn', { path: debugLogFilePath() }));

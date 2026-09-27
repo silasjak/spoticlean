@@ -1,0 +1,50 @@
+name: Release
+
+# Cut a release with: npm version patch|minor|major && git push --follow-tags
+# That command bumps package.json, commits, and tags in one step; pushing the
+# resulting vX.Y.Z tag is what triggers this workflow.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to create the GitHub Release
+      id-token: write # to mint the OIDC token npm exchanges for a publish token (Trusted Publishing — no NPM_TOKEN secret needed)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: npm ci
+
+      # Trusted Publishing needs a recent npm CLI — the one bundled with the
+      # setup-node action's Node 20 predates OIDC support, so bump it first.
+      - run: npm install -g npm@latest
+
+      # Re-verified here (not just trusted from CI on main) since a tag can
+      # in principle be pushed from anywhere — this is the actual gate in
+      # front of `npm publish`, same checks prepublishOnly runs locally.
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+      # No NODE_AUTH_TOKEN — npm authenticates via OIDC (this job's
+      # id-token permission) against the Trusted Publisher entry configured
+      # on npmjs.com for this exact repo + workflow file. --provenance
+      # attaches a signed build attestation, which Trusted Publishing
+      # enables for free.
+      - run: npm publish --provenance
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${{ github.ref_name }}" --generate-notes

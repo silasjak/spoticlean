@@ -16,7 +16,7 @@ const stateDir = mkdtempSync(path.join(tmpdir(), 'spoticlean-test-state-'));
 process.env.XDG_CONFIG_HOME = configDir;
 process.env.XDG_STATE_HOME = stateDir;
 
-const configFile = path.join(configDir, 'spoticlean-cli', 'config.json');
+const configFile = path.join(configDir, 'spoticlean', 'config.json');
 mkdirSync(path.dirname(configFile), { recursive: true });
 writeFileSync(
   configFile,

@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import envPaths from 'env-paths';
 
-const paths = envPaths('spoticlean-cli', { suffix: '' });
+const paths = envPaths('spoticlean', { suffix: '' });
 const LOG_FILE = path.join(paths.log, 'debug.log');
 
 const enabled = process.env.SPOTICLEAN_DEBUG === '1' || process.argv.includes('--debug');
