@@ -7,6 +7,8 @@ then **keep** or **remove** it.
 ![node](https://img.shields.io/badge/node-%3E%3D20-1DB954)
 [![CI](https://github.com/silasjak/spoticlean/actions/workflows/ci.yml/badge.svg)](https://github.com/silasjak/spoticlean/actions/workflows/ci.yml)
 
+![Each song starts at the chorus; one key keeps or removes it](media/demo.gif)
+
 ## Requirements
 
 - Node.js ≥ 20
