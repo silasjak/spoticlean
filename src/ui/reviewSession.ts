@@ -19,7 +19,13 @@ import type { SpotifyTrack, TrackItem } from '../spotify/types.js';
 import { isInteractiveTerminal, readKey, withRawMode } from './keypress.js';
 import { detectColorMode, loadCover, pickCoverImage, renderCover, type RgbaImage } from './coverArt.js';
 import { buildInfoFrame, coverColumnsFor, type CoverState } from './infoFrame.js';
-import { buildReviewFrame, type Decision, type StatusLine } from './reviewFrame.js';
+import {
+  buildReviewFrame,
+  THUMBNAIL_COLUMNS,
+  THUMBNAIL_MIN_WIDTH,
+  type Decision,
+  type StatusLine,
+} from './reviewFrame.js';
 import { enterAltScreen, exitAltScreen, paintFrame, terminalHeight, terminalWidth } from './terminal.js';
 
 const SEEK_STEP_MS = 10_000;
@@ -180,6 +186,35 @@ export async function runReviewSession(
     return coverMemo.lines;
   }
 
+  // Cover thumbnails for the track card, rendered once per cover (Spotify's
+  // 64px image is all 8×8 pixels need). Missing ones start loading on first
+  // ask and repaint when they arrive; until then a dim placeholder keeps the
+  // card from jumping.
+  const thumbnails = new Map<string, string[]>();
+  const THUMBNAIL_PLACEHOLDER = Array.from({ length: 4 }, () => pc.dim('░'.repeat(THUMBNAIL_COLUMNS)));
+
+  function thumbnailFor(track: SpotifyTrack | undefined): string[] | undefined {
+    // An 8×4 ASCII ramp is just noise, and a narrow terminal needs the room for the title.
+    if (!track || track.is_local || colorMode === 'ascii' || terminalWidth() < THUMBNAIL_MIN_WIDTH) return undefined;
+    const image = pickCoverImage(track.album.images, 16);
+    if (!image) return undefined;
+    const ready = thumbnails.get(image.url);
+    if (ready) return ready;
+    thumbnails.set(image.url, THUMBNAIL_PLACEHOLDER);
+    void loadCover(image.url).then((loaded) => {
+      thumbnails.set(
+        image.url,
+        loaded ? renderCover(loaded, THUMBNAIL_COLUMNS, colorMode) : THUMBNAIL_PLACEHOLDER.map(() => '')
+      );
+      render();
+    });
+    return THUMBNAIL_PLACEHOLDER;
+  }
+
+  // The track playback was last started for — what Space/seek act on while
+  // the info view shows some other track.
+  let playingTrack: SpotifyTrack | undefined;
+
   function render(): void {
     if (info) {
       const width = terminalWidth();
@@ -190,6 +225,8 @@ export async function runReviewSession(
           item: tracks[info.index]!,
           trackNumber: info.index + 1,
           totalTracks: tracks.length,
+          reviewTrackNumber: Math.min(view.index + 1, tracks.length),
+          nowPlaying: { track: playingTrack, hasDevice, isPaused: view.isPaused, positionMs: view.positionMs, status },
           decision: decisions.get(info.index),
           cover: infoCover(info.image, coverColumnsFor(width, height)),
           width,
@@ -212,6 +249,7 @@ export async function runReviewSession(
         editing: isEditing,
         editingIndex,
         status,
+        thumbnail: thumbnailFor(tracks[view.index]?.track),
         width: terminalWidth(),
         height: terminalHeight(),
       })
@@ -281,6 +319,8 @@ export async function runReviewSession(
   // track.
   async function startPlayback(track: SpotifyTrack): Promise<void> {
     status = undefined;
+    playingTrack = track;
+    thumbnailFor(tracks[view.index + 1]?.track); // fetch the next cover ahead, so it's there when that track comes up
     view.positionMs = estimateChorusPositionMs(track.duration_ms);
     view.isPaused = false;
     render();
@@ -391,6 +431,8 @@ export async function runReviewSession(
         const normalized = normalizeKey(key);
         if (normalized === 'i' || normalized === 'escape' || normalized === 'q') return false;
         if (normalized === 'o') openInSpotify(track);
+        // Playback keys keep working down here, on whatever is playing (the status row shows it).
+        else if (playingTrack) await handlePlaybackOrOpenKey(normalized, playingTrack);
       }
     } finally {
       info = null;

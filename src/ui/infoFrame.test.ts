@@ -30,12 +30,16 @@ function makeItem(overrides: Partial<SpotifyTrack> = {}): TrackItem {
   };
 }
 
+const idle = { track: undefined, hasDevice: false, isPaused: false, positionMs: 0 };
+
 function frame(overrides: Partial<InfoFrameState> = {}): string[] {
   return buildInfoFrame({
     sourceName: 'Lieblingssongs',
     item: makeItem(),
     trackNumber: 3,
     totalTracks: 233,
+    reviewTrackNumber: 5,
+    nowPlaying: { track: makeItem().track, hasDevice: true, isPaused: false, positionMs: 60_000 },
     cover: 'loading',
     width: 100,
     height: 30,
@@ -65,7 +69,8 @@ test('shows the details next to the cover on a wide terminal', () => {
 });
 
 test('stacks the details under the cover on a narrow terminal', () => {
-  const text = frame({ width: 60, height: 40 }).map(stripAnsi);
+  // No playback, so the only ░ on screen are the cover placeholder's (the progress bar uses them too)
+  const text = frame({ width: 60, height: 40, nowPlaying: idle }).map(stripAnsi);
   const coverRows = text.filter((line) => line.includes('░'));
   assert.ok(coverRows.length > 0);
   assert.ok(!coverRows.some((line) => line.includes('Forever Young')));
@@ -85,5 +90,19 @@ test('names the decision of an already-reviewed track', () => {
 
 test('leaves the cover out entirely when there is no room for a recognizable one', () => {
   assert.equal(coverColumnsFor(30, 10), 0);
-  assert.ok(!frame({ width: 30, height: 10 }).map(stripAnsi).some((line) => line.includes('░')));
+  assert.ok(!frame({ width: 30, height: 10, nowPlaying: idle }).map(stripAnsi).some((line) => line.includes('░')));
+});
+
+test('keeps the review header, one level deeper', () => {
+  const top = stripAnsi(frame()[0]!);
+  assert.ok(top.includes('Lieblingssongs · Track 5/233 › Song-Info'), top);
+});
+
+test('shows what is playing underneath, naming it only when it is not the shown track', () => {
+  const own = frame().map(stripAnsi);
+  assert.ok(own.some((line) => line.includes('▶ 1:00')));
+
+  const other = { ...makeItem().track, uri: 'spotify:track:other', name: 'Old Joy' };
+  const elsewhere = frame({ nowPlaying: { track: other, hasDevice: true, isPaused: true, positionMs: 0 } }).map(stripAnsi);
+  assert.ok(elsewhere.some((line) => line.includes('⏸ Old Joy  0:00')));
 });

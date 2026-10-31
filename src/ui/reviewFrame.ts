@@ -6,6 +6,7 @@ import { spotifyGreen } from './brand.js';
 import { boxBlank, boxBottom, boxDivider, boxLine, boxTop, fitWidth, innerWidth } from './box.js';
 import { formatAddedAt, formatArtists, formatDuration } from './format.js';
 import { buildKeyHintLines } from './keyHints.js';
+import { truncate } from './terminal.js';
 
 export type Decision = 'kept' | 'removed';
 export type HistoryEntry = { track: SpotifyTrack; decision: Decision };
@@ -29,14 +30,21 @@ export type ReviewFrameState = {
   /** Same array-position space as `historyCursor` — that entry is highlighted (with a note) while editing. */
   editingIndex?: number;
   status?: StatusLine;
+  /** Small cover (THUMBNAIL_COLUMNS wide, 4 rows) next to the track details; omitted = no thumbnail column at all. */
+  thumbnail?: string[];
   width: number;
   height: number;
 };
 
+/** Width of the cover thumbnail in the track card; 4 rows of half blocks = 8×8 pixels. */
+export const THUMBNAIL_COLUMNS = 8;
+/** Below this terminal width the thumbnail would cost too much of the title's room. */
+export const THUMBNAIL_MIN_WIDTH = 60;
+
 const identity = (text: string) => text;
 
 /** A "0:35 ███████░░░░░░░░░░░░ 3:20" bar, sized to fill exactly `width` columns — the filled portion accented in brand green, the rest dim. */
-function buildProgressBar(positionMs: number, durationMs: number, width: number): string {
+export function buildProgressBar(positionMs: number, durationMs: number, width: number): string {
   const elapsed = formatDuration(positionMs);
   const total = formatDuration(durationMs);
   const barWidth = Math.max(0, width - elapsed.length - total.length - 2);
@@ -44,6 +52,33 @@ function buildProgressBar(positionMs: number, durationMs: number, width: number)
   const filled = Math.round(ratio * barWidth);
   const bar = spotifyGreen('█'.repeat(filled)) + pc.dim('░'.repeat(barWidth - filled));
   return `${pc.dim(elapsed)} ${bar} ${pc.dim(total)}`;
+}
+
+/**
+ * The card's one status/progress row, `width` columns wide: a status
+ * message if there is one, else "▶ 0:35 ████░░░ 3:20" for `track` (with
+ * `label` — the track's name — in front, for views where the playing track
+ * isn't otherwise on screen), else blank.
+ */
+export function buildStatusRow(
+  state: {
+    track: SpotifyTrack | undefined;
+    hasDevice: boolean;
+    isPaused: boolean;
+    positionMs: number;
+    status?: StatusLine;
+    label?: string;
+  },
+  width: number
+): string {
+  const { track, hasDevice, isPaused, positionMs, status, label } = state;
+  if (status) return (status.color ?? identity)(truncate(status.text, width));
+  if (!track || !hasDevice || track.is_local) return '';
+  const icon = pc.dim(isPaused ? '⏸' : '▶');
+  // The name gets at most a third of the row, the bar needs the rest to stay readable.
+  const name = label ? truncate(label, Math.floor(width / 3)) : '';
+  const prefixWidth = 2 + (name ? name.length + 2 : 0);
+  return `${icon} ${name ? `${name}  ` : ''}${buildProgressBar(positionMs, track.duration_ms, width - prefixWidth)}`;
 }
 
 /** Keeps `cursor` inside the visible window, centering on it once the list no longer fits. */
@@ -87,23 +122,26 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
   const title = t('review.frame.title', { source: sourceName, current: trackNumber, total: totalTracks });
   const header = [boxTop(width, fitWidth(title, width, 3))];
 
-  const card: string[] = [boxBlank(width)];
+  // The thumbnail sits left of the four card rows (title, artists, length,
+  // progress); everything else in the card shifts right and narrows by its
+  // width plus a gap. Local files have no cover, so no column for them.
+  const thumbnail = track && !track.is_local && state.thumbnail?.length ? state.thumbnail : undefined;
+  const textWidth = innerWidth(width) - (thumbnail ? THUMBNAIL_COLUMNS + 2 : 0);
+
+  const rows: string[] = [];
   if (track && item) {
-    card.push(boxLine(spotifyGreen(pc.bold(fitWidth(track.name, width))), width));
-    card.push(boxLine(pc.dim(fitWidth(`${formatArtists(track)} · ${track.album.name}`, width)), width));
-    card.push(
-      boxLine(
-        pc.dim(
-          fitWidth(
-            `${formatDuration(track.duration_ms)} · ${t('review.frame.addedOn', { date: formatAddedAt(item.added_at) })}`,
-            width
-          )
-        ),
-        width
+    rows.push(spotifyGreen(pc.bold(truncate(track.name, textWidth))));
+    rows.push(pc.dim(truncate(`${formatArtists(track)} · ${track.album.name}`, textWidth)));
+    rows.push(
+      pc.dim(
+        truncate(
+          `${formatDuration(track.duration_ms)} · ${t('review.frame.addedOn', { date: formatAddedAt(item.added_at) })}`,
+          textWidth
+        )
       )
     );
     if (track.is_local) {
-      card.push(boxLine(pc.dim(t('review.frame.localFile')), width));
+      rows.push(pc.dim(truncate(t('review.frame.localFile'), textWidth)));
     }
   }
   // Always exactly one status/progress row (blank when neither applies) so
@@ -116,12 +154,14 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
   // current position) is simply not visible for as long as a message is up;
   // it comes back on its own once that's replaced or cleared (see
   // startPlayback()).
-  const canShowProgress = Boolean(track) && hasDevice && !track!.is_local;
-  const progressBar = canShowProgress
-    ? `${pc.dim(isPaused ? '⏸' : '▶')} ${buildProgressBar(positionMs, track!.duration_ms, innerWidth(width) - 2)}`
-    : '';
-  card.push(boxLine(status ? (status.color ?? identity)(fitWidth(status.text, width)) : progressBar, width));
-  card.push(boxBlank(width));
+  rows.push(buildStatusRow({ track, hasDevice, isPaused, positionMs, status }, textWidth));
+  const card = [
+    boxBlank(width),
+    ...rows.map((row, i) =>
+      boxLine(thumbnail ? `${thumbnail[i] ?? ' '.repeat(THUMBNAIL_COLUMNS)}  ${row}` : row, width)
+    ),
+    boxBlank(width),
+  ];
 
   const footerHintLines = buildKeyHintLines(hasDevice, innerWidth(width), hintMode).map((line) => boxLine(line, width));
   const footer = [boxDivider(width), ...footerHintLines, boxBottom(width)];

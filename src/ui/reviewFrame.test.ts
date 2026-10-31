@@ -288,3 +288,19 @@ test('a short history is never clipped regardless of cursor position', () => {
     for (let i = 0; i < 5; i++) assert.match(frame, new RegExp(`Song ${i}\\b`));
   }
 });
+
+test('the thumbnail sits left of title, artists, length and progress, and the card stays the same width', () => {
+  const thumbnail = Array.from({ length: 4 }, (_, i) => `T${i}`.padEnd(8, '#'));
+  const lines = buildReviewFrame({ ...baseState(), hasDevice: true, thumbnail, width: 80, height: 24 });
+  const text = lines.map(stripAnsi);
+  assert.ok(text.some((line) => line.includes('T0######  Ein Song')));
+  assert.ok(text.some((line) => line.includes('T1######  Ein Artist · Ein Album')));
+  assert.ok(text.some((line) => line.includes('T3######  ▶ ')));
+  for (const line of lines) assert.equal(visibleLength(line), 80);
+});
+
+test('no thumbnail column for local files, even if one is passed', () => {
+  const thumbnail = Array.from({ length: 4 }, () => 'X'.repeat(8));
+  const lines = buildReviewFrame({ ...baseState(), item: makeItem({ is_local: true }), thumbnail, width: 80, height: 24 });
+  assert.ok(!lines.map(stripAnsi).some((line) => line.includes('XXXXXXXX')));
+});

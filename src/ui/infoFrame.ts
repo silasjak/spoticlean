@@ -2,12 +2,12 @@ import pc from 'picocolors';
 
 import { t } from '../i18n/index.js';
 import { estimateChorusPositionMs } from '../spotify/playback.js';
-import type { TrackItem } from '../spotify/types.js';
+import type { SpotifyTrack, TrackItem } from '../spotify/types.js';
 import { spotifyGreen } from './brand.js';
 import { boxBlank, boxBottom, boxDivider, boxLine, boxTop, fitWidth, innerWidth } from './box.js';
 import { formatAddedAt, formatArtists, formatDuration } from './format.js';
 import { packKeyHints } from './hintLine.js';
-import type { Decision } from './reviewFrame.js';
+import { buildStatusRow, type Decision, type StatusLine } from './reviewFrame.js';
 import { truncate } from './terminal.js';
 
 /** The cover as rendered lines, or why there's none (yet). */
@@ -16,9 +16,19 @@ export type CoverState = string[] | 'loading' | 'none';
 export type InfoFrameState = {
   sourceName: string;
   item: TrackItem;
-  /** 1-based position in the source. */
+  /** 1-based position of the shown track in the source. */
   trackNumber: number;
   totalTracks: number;
+  /** 1-based position the review itself is at — the header stays the review's, with "› Song info" appended. */
+  reviewTrackNumber: number;
+  /** What's playing underneath (not necessarily the shown track), for the status/progress row above the key legend. */
+  nowPlaying: {
+    track: SpotifyTrack | undefined;
+    hasDevice: boolean;
+    isPaused: boolean;
+    positionMs: number;
+    status?: StatusLine;
+  };
   /** Set for already-decided tracks (opened from the history list); undefined = not decided yet. */
   decision?: Decision;
   cover: CoverState;
@@ -31,8 +41,8 @@ const MAX_COVER_COLUMNS = 40;
 /** Narrower than this, the details go below the cover instead of next to it. */
 const SIDE_BY_SIDE_MIN_WIDTH = 72;
 
-// Box chrome around the body: top border, blank, blank, divider, one hint line, bottom border.
-const CHROME_ROWS = 6;
+// Box chrome around the body: top border, blank, blank, status row, divider, one hint line, bottom border.
+const CHROME_ROWS = 7;
 // Roughly how many detail lines there are, reserved under a stacked cover.
 const DETAIL_ROWS_STACKED = 12;
 
@@ -163,15 +173,34 @@ export function buildInfoFrame(state: InfoFrameState): string[] {
     for (const line of details) body.push(boxLine(line, width));
   }
 
+  const { nowPlaying } = state;
   const hints = packKeyHints(
     [
       { key: 'i/Esc', desc: t('review.hints.closeInfo') },
+      ...(nowPlaying.hasDevice
+        ? [
+            { key: '␣', desc: t('review.hints.pause') },
+            { key: '←/→', desc: t('review.hints.seek') },
+          ]
+        : []),
       { key: 'o', desc: t('review.hints.open') },
     ],
     inner
   );
 
-  const title = fitWidth(t('review.info.title'), width, 3);
+  // Same header as the review screen plus where you are, so this reads as a
+  // level below it rather than a separate screen.
+  const reviewTitle = t('review.frame.title', {
+    source: state.sourceName,
+    current: state.reviewTrackNumber,
+    total: state.totalTracks,
+  });
+  const title = fitWidth(`${reviewTitle} › ${t('review.info.title')}`, width, 3);
+  // The playing track is named in front of its progress bar only when the
+  // view shows a different one — otherwise the title right above says it.
+  const playingOther = nowPlaying.track && nowPlaying.track.uri !== track.uri;
+  const statusRow = buildStatusRow({ ...nowPlaying, label: playingOther ? nowPlaying.track!.name : undefined }, inner);
+
   const fixed = CHROME_ROWS - 1 + hints.length;
   const visibleBody = body.slice(0, Math.max(0, height - fixed));
   return [
@@ -179,6 +208,7 @@ export function buildInfoFrame(state: InfoFrameState): string[] {
     boxBlank(width),
     ...visibleBody,
     boxBlank(width),
+    boxLine(statusRow, width),
     boxDivider(width),
     ...hints.map((line) => boxLine(line, width)),
     boxBottom(width),
