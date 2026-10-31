@@ -255,7 +255,10 @@ function ansiToHtml(line: string): string {
       if (part.startsWith('▀')) {
         html += `<span class="half" style="width:${part.length}ch;background:linear-gradient(${fg} 50%,${bg ?? BG} 50%)"></span>`;
       } else {
-        html += `<span style="${css.join(';')}">${escapeHtml(part)}</span>`;
+        // The braille spinner isn't in the monospace font; its fallback glyph is
+        // wider than a cell and would push the rest of the row to the right.
+        const cells = escapeHtml(part).replace(/[\u2800-\u28ff]/g, (glyph) => `<span class="cell">${glyph}</span>`);
+        html += `<span style="${css.join(';')}">${cells}</span>`;
       }
     }
   };
@@ -301,10 +304,17 @@ const CSS = `
   .key { font: 700 17px 'DejaVu Sans Mono', monospace; color: #0d0f14; background: #1db954; border-radius: 7px; padding: 6px 12px; }
   .hint { opacity: .5; font-weight: 500; }
   .half { display: inline-block; height: 1.45em; vertical-align: top; }
+  .row { height: 1.45em; width: ${COLS}ch; overflow: hidden; }
+  .cell { display: inline-block; width: 1ch; overflow: hidden; vertical-align: top; }
 `;
 
 function frameHtml(frame: Frame): string {
-  const rows = [...frame.lines, ...Array<string>(ROWS - frame.lines.length).fill('')].map(ansiToHtml).join('\n');
+  // One fixed-height block per terminal row: a glyph from a fallback font
+  // (the braille spinner) would otherwise make its line a few pixels taller,
+  // and every frame has to come out exactly the same size.
+  const rows = [...frame.lines, ...Array<string>(ROWS - frame.lines.length).fill('')]
+    .map((line) => `<div class="row">${ansiToHtml(line)}</div>`)
+    .join('');
   const cap = frame.key
     ? `<span class="key">${escapeHtml(frame.key)}</span><span>${escapeHtml(frame.label ?? '')}</span>`
     : '<span class="hint">listening from the chorus…</span>';
@@ -354,6 +364,12 @@ await browser.close();
 // slot reserved as "unchanged since the previous frame". Marking unchanged
 // pixels transparent lets most of each frame compress down to almost nothing.
 const { width, height } = rgbaFrames[0]!;
+// A frame of a different size gets written with the first frame's dimensions,
+// which corrupts the file from that frame on (browsers stop playing there).
+const misfit = rgbaFrames.findIndex((f) => f.width !== width || f.height !== height);
+if (misfit !== -1) {
+  throw new Error(`Frame ${misfit} is ${rgbaFrames[misfit]!.width}×${rgbaFrames[misfit]!.height}, not ${width}×${height}`);
+}
 const combined = new Uint8Array(rgbaFrames.reduce((sum, f) => sum + f.data.length, 0));
 rgbaFrames.reduce((offset, f) => (combined.set(f.data, offset), offset + f.data.length), 0);
 const palette = quantize(combined, 255);
