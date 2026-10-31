@@ -140,11 +140,27 @@ function capture(ms: number): void {
   });
 }
 
+// Pacing: a key is shown on the still unchanged screen first, so you can
+// read what's about to happen, and its result then stays up long enough to
+// take in — the GIF has no other way to explain itself.
+const KEY_LEAD_MS = 900;
+const RESULT_MS = 1600;
+const SPIN_FRAME_MS = 110;
+
+// Which history entry the info view is open for, or null when it's closed
+let infoPosition: number | null = null;
+
+/** The current screen: the info view while it's open, the review screen otherwise. */
+function show(ms: number): void {
+  if (infoPosition === null) capture(ms);
+  else captureInfo(infoPosition, ms);
+}
+
 /** Like withBusy(): the row the action concerns spins while Spotify answers. */
 function spin(row: number | 'current', steps: number): void {
   for (let i = 0; i < steps; i++) {
     spinner = { row, glyph: SPINNER[i % SPINNER.length]! };
-    capture(110);
+    capture(SPIN_FRAME_MS);
   }
   spinner = undefined;
 }
@@ -154,31 +170,34 @@ function startTrack(): void {
   positionMs = estimateChorusPositionMs(items[index]!.track.duration_ms);
 }
 
-/** One frame per played second, sped up so the GIF stays short. */
+/** One frame per played second, sped up a little so the GIF doesn't drag. */
 function listen(seconds: number): void {
   for (let i = 0; i < seconds; i++) {
-    capture(450);
+    capture(650);
     positionMs += 1000;
   }
 }
 
-function decide(decision: HistoryEntry['decision'], key: string): void {
-  caption = { key, label: decision === 'kept' ? 'keep' : 'remove' };
+function decide(decision: HistoryEntry['decision'], key: string, label: string): void {
+  caption = { key, label };
+  show(KEY_LEAD_MS);
   history.push({ track: items[index]!.track, decision });
   // Removing waits on Spotify first (that entry's ✗ spins), then the next track starts (its → spins)
-  if (decision === 'removed') spin(history.length - 1, 5);
+  if (decision === 'removed') spin(history.length - 1, 7);
   index += 1;
   startTrack();
-  spin('current', 4);
-  capture(500);
+  spin('current', 6);
+  show(RESULT_MS);
   caption = undefined;
-  positionMs += 1000;
+  positionMs += 2000;
 }
 
-function press(key: string, label: string, ms: number, update: () => void): void {
+function press(key: string, label: string, update: () => void, ms = RESULT_MS): void {
   caption = { key, label };
+  show(KEY_LEAD_MS);
   update();
-  capture(ms);
+  show(ms);
+  caption = undefined;
 }
 
 /** The song info view (`i`) for history entry `position`, with the current track still playing underneath. */
@@ -204,21 +223,19 @@ function captureInfo(position: number, ms: number): void {
 
 startTrack();
 listen(3);
-decide('kept', '⏎');
+decide('kept', '⏎', 'keep — the next song starts at its chorus');
 listen(2);
-decide('removed', 'r');
+decide('removed', 'r', 'remove — taken out of Liked Songs');
 listen(2);
-press('↑', 'history', 600, () => (historyCursor = history.length - 1));
-caption = { key: 'i', label: 'song info' };
-captureInfo(history.length - 1, 2200);
-positionMs += 2000;
-press('Esc', 'back', 700, () => undefined);
-press('Esc', 'leave history', 500, () => (historyCursor = null));
-caption = undefined;
+press('↑', 'browse the songs you already decided on', () => (historyCursor = history.length - 1), 1400);
+press('i', 'song info — cover and details', () => (infoPosition = historyCursor), 4200);
+positionMs += 4000;
+press('Esc', 'back to the history', () => (infoPosition = null), 1200);
+press('Esc', 'back to the current song', () => (historyCursor = null), 1200);
 listen(1);
-decide('kept', '⏎');
+decide('kept', '⏎', 'keep');
 listen(2);
-frames[frames.length - 1]!.ms = 900;
+frames[frames.length - 1]!.ms = 2500; // a moment before the loop starts over
 
 // --- ANSI → HTML ---------------------------------------------------------
 
@@ -313,7 +330,7 @@ function ansiToHtml(line: string): string {
 
 const CSS = `
   * { box-sizing: border-box; margin: 0; }
-  body { background: transparent; }
+  body { background: #0d0f14; }
   #stage { display: inline-block; background: #0d0f14; }
   .bar { height: 36px; display: flex; align-items: center; padding: 0 14px; gap: 8px; background: #1c1f26; border-bottom: 1px solid #262a33; position: relative; }
   .dot { width: 12px; height: 12px; border-radius: 50%; }
@@ -349,6 +366,11 @@ function frameHtml(frame: Frame): string {
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH });
 const page = await browser.newPage({ deviceScaleFactor: RENDER_SCALE, viewport: { width: 1400, height: 1200 } });
 await page.setContent(`<style>${CSS}</style><div id="root"></div>`);
+// 80 monospace cells make a fractional width, which the screenshot would round
+// up into the page behind the stage (a light stripe on the right). Pin it to whole pixels.
+await page.evaluate((html) => (document.getElementById('root')!.innerHTML = html), frameHtml(frames[0]!));
+const stageWidth = await page.evaluate(() => Math.ceil(document.getElementById('stage')!.getBoundingClientRect().width));
+await page.addStyleTag({ content: `#stage { width: ${stageWidth}px; } pre { width: 100%; }` });
 
 const rgbaFrames: { data: Uint8Array; width: number; height: number }[] = [];
 for (const frame of frames) {
