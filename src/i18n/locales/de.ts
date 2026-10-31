@@ -113,6 +113,7 @@ const de = {
       premiumRequired: 'Automatisches Abspielen benötigt Spotify Premium — nur noch Metadaten.',
       noDevice: 'Kein aktives Wiedergabegerät mehr gefunden — nur noch Metadaten.',
       actionFailed: 'Wiedergabe-Aktion fehlgeschlagen{{detail}}: {{message}}',
+      stopped: 'Spotify hat die Wiedergabe auf dem Gerät beendet — Leertaste startet den Song neu.',
     },
     openedInSpotify: 'In Spotify geöffnet: {{name}}',
     removing: 'Entferne: {{name}}…',

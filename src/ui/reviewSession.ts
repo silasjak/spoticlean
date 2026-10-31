@@ -5,7 +5,15 @@ import open from 'open';
 import { loadConfig, updateConfig, type ResumeState } from '../config.js';
 import { t } from '../i18n/index.js';
 import { SpotifyApiError } from '../spotify/client.js';
-import { estimateChorusPositionMs, pausePlayback, playTrackAt, resumePlayback, seek } from '../spotify/playback.js';
+import {
+  estimateChorusPositionMs,
+  getPlaybackState,
+  isLoadedOn,
+  pausePlayback,
+  playTrackAt,
+  resumePlayback,
+  seek,
+} from '../spotify/playback.js';
 import { fetchAllTracks, removeTrack, restoreTrack, type TrackSource } from '../spotify/tracks.js';
 import type { SpotifyTrack, TrackItem } from '../spotify/types.js';
 import { isInteractiveTerminal, readKey, withRawMode } from './keypress.js';
@@ -179,11 +187,13 @@ export async function runReviewSession(
   // press while a call is still in flight, a transient 5xx, ...) is just
   // noted and retried on the next action instead of disabling playback.
   const SESSION_ENDING_REASONS = new Set(['PREMIUM_REQUIRED', 'NO_ACTIVE_DEVICE']);
+  const isSessionEnding = (error: unknown) =>
+    error instanceof SpotifyApiError && !!error.reason && SESSION_ENDING_REASONS.has(error.reason);
 
   const onPlaybackError = (error: unknown) => {
     const reason = error instanceof SpotifyApiError ? error.reason : undefined;
 
-    if (hasDevice && reason && SESSION_ENDING_REASONS.has(reason)) {
+    if (hasDevice && isSessionEnding(error)) {
       hasDevice = false;
       stopTicking();
       setStatus(
@@ -243,11 +253,44 @@ export async function runReviewSession(
       startTicking(track.duration_ms);
       // Awaited (not fire-and-forget): a pause/seek pressed while this is
       // still in flight would race it and produce spurious errors.
-      await safePlayback(() => playTrackAt(track.uri, view.positionMs, deviceId), onPlaybackError);
+      await restartAt(track);
       render();
     } else {
       stopTicking();
     }
+  }
+
+  // (Re)starts `track` at view.positionMs. Returns whether Spotify accepted the command.
+  async function restartAt(track: SpotifyTrack): Promise<boolean> {
+    const ok = await safePlayback(() => playTrackAt(track.uri, view.positionMs, deviceId), onPlaybackError);
+    if (ok) view.isPaused = false;
+    return ok;
+  }
+
+  async function togglePause(track: SpotifyTrack): Promise<void> {
+    if (view.isPaused) {
+      // Resuming fails once the device has dropped the track — then start it again at the same spot instead.
+      const resumed = await safePlayback(() => resumePlayback(deviceId), () => undefined);
+      if (resumed) view.isPaused = false;
+      else await restartAt(track);
+    } else {
+      try {
+        await pausePlayback(deviceId);
+        view.isPaused = true;
+      } catch (error) {
+        // "Restriction violated" on pause almost always means nothing is
+        // playing any more. Say so (and treat it as paused, so the next
+        // Space restarts the track) instead of re-sending a pause forever.
+        const state = await getPlaybackState().catch(() => null);
+        if (isSessionEnding(error) || (state?.is_playing && isLoadedOn(state, track.uri, deviceId))) {
+          onPlaybackError(error);
+        } else {
+          view.isPaused = true;
+          setStatus(t('review.playback.stopped'), pc.yellow);
+        }
+      }
+    }
+    render();
   }
 
   // Keys that make sense any time a track is on screen, regardless of
@@ -261,13 +304,7 @@ export async function runReviewSession(
         setStatus(t('review.openedInSpotify', { name: track.name }), pc.dim);
         return true;
       case ' ':
-        if (hasDevice) {
-          const ok = view.isPaused
-            ? await safePlayback(() => resumePlayback(deviceId), onPlaybackError)
-            : await safePlayback(() => pausePlayback(deviceId), onPlaybackError);
-          if (ok) view.isPaused = !view.isPaused;
-          render();
-        }
+        if (hasDevice) await togglePause(track);
         return true;
       case 'right':
         if (hasDevice) {

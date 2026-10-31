@@ -112,6 +112,7 @@ const en: Translations = {
       premiumRequired: 'Auto-play needs Spotify Premium — metadata only from here.',
       noDevice: 'No active playback device found any more — metadata only from here.',
       actionFailed: 'Playback action failed{{detail}}: {{message}}',
+      stopped: 'Spotify stopped playback on the device — press Space to start this song again.',
     },
     openedInSpotify: 'Opened in Spotify: {{name}}',
     removing: 'Removing: {{name}}…',

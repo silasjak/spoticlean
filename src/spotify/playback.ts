@@ -39,6 +39,17 @@ export async function seek(positionMs: number, deviceId?: string): Promise<void>
 }
 
 /**
+ * Whether `uri` is what's loaded on `deviceId` right now (not necessarily
+ * playing — paused counts). Used to tell a pause that failed because
+ * nothing is playing any more (a device that dropped its player answers
+ * "Restriction violated") apart from a genuine failure.
+ */
+export function isLoadedOn(state: PlaybackState, uri: string, deviceId: string | undefined): boolean {
+  if (!state?.item || state.item.uri !== uri) return false;
+  return !deviceId || state.device?.id === deviceId;
+}
+
+/**
  * Rough heuristic for "where the chorus probably starts": most pop/rock
  * songs land their first chorus somewhere around 35-45% in, after an
  * intro + verse + pre-chorus. Not musicologically rigorous, just good
