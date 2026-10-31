@@ -304,3 +304,15 @@ test('no thumbnail column for local files, even if one is passed', () => {
   const lines = buildReviewFrame({ ...baseState(), item: makeItem({ is_local: true }), thumbnail, width: 80, height: 24 });
   assert.ok(!lines.map(stripAnsi).some((line) => line.includes('XXXXXXXX')));
 });
+
+test('a spinner replaces the symbol of the row an action is waiting on — the track card stays as it is', () => {
+  const history = makeHistory(2, 'removed');
+  const pending = buildReviewFrame({ ...baseState(), history, spinner: { row: 'current', glyph: '⠹' } }).map(stripAnsi);
+  assert.ok(pending.some((line) => line.includes('⠹ Ein Song')));
+  assert.ok(!pending.some((line) => line.includes('→ Ein Song')));
+
+  const removing = buildReviewFrame({ ...baseState(), history, spinner: { row: 1, glyph: '⠹' } }).map(stripAnsi);
+  assert.ok(removing.some((line) => line.includes('⠹ Song 1')));
+  assert.ok(removing.some((line) => line.includes('✗ Song 0')));
+  assert.ok(removing.some((line) => line.includes('→ Ein Song')));
+});

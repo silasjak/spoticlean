@@ -6,7 +6,7 @@ import { spotifyGreen } from './brand.js';
 import { boxBlank, boxBottom, boxDivider, boxLine, boxTop, fitWidth, innerWidth } from './box.js';
 import { formatAddedAt, formatArtists, formatDuration } from './format.js';
 import { buildKeyHintLines } from './keyHints.js';
-import { truncate } from './terminal.js';
+import { truncate, visibleLength } from './terminal.js';
 
 export type Decision = 'kept' | 'removed';
 export type HistoryEntry = { track: SpotifyTrack; decision: Decision };
@@ -30,13 +30,15 @@ export type ReviewFrameState = {
   /** Same array-position space as `historyCursor` — that entry is highlighted (with a note) while editing. */
   editingIndex?: number;
   status?: StatusLine;
-  /** Small cover (THUMBNAIL_COLUMNS wide, 4 rows) next to the track details; omitted = no thumbnail column at all. */
+  /** An action waiting on Spotify: this history row (by position, or the pending track's own) shows `glyph` instead of its symbol. */
+  spinner?: { row: number | 'current'; glyph: string };
+  /** Small cover (THUMBNAIL_COLUMNS wide, half as many rows) next to the track details; omitted = no thumbnail column at all. */
   thumbnail?: string[];
   width: number;
   height: number;
 };
 
-/** Width of the cover thumbnail in the track card; 4 rows of half blocks = 8×8 pixels. */
+/** Width of the cover thumbnail in the track card; half as many rows of half blocks, so 8 → 8×8 pixels in 4 rows. */
 export const THUMBNAIL_COLUMNS = 8;
 /** Below this terminal width the thumbnail would cost too much of the title's room. */
 export const THUMBNAIL_MIN_WIDTH = 60;
@@ -68,13 +70,15 @@ export function buildStatusRow(
     positionMs: number;
     status?: StatusLine;
     label?: string;
+    /** Replaces the play/pause icon while an action is waiting on Spotify (views without a history list). */
+    spinner?: string;
   },
   width: number
 ): string {
-  const { track, hasDevice, isPaused, positionMs, status, label } = state;
+  const { track, hasDevice, isPaused, positionMs, status, label, spinner } = state;
   if (status) return (status.color ?? identity)(truncate(status.text, width));
   if (!track || !hasDevice || track.is_local) return '';
-  const icon = pc.dim(isPaused ? '⏸' : '▶');
+  const icon = spinner ? spotifyGreen(spinner) : pc.dim(isPaused ? '⏸' : '▶');
   // The name gets at most a third of the row, the bar needs the rest to stay readable.
   const name = label ? truncate(label, Math.floor(width / 3)) : '';
   const prefixWidth = 2 + (name ? name.length + 2 : 0);
@@ -126,7 +130,8 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
   // progress); everything else in the card shifts right and narrows by its
   // width plus a gap. Local files have no cover, so no column for them.
   const thumbnail = track && !track.is_local && state.thumbnail?.length ? state.thumbnail : undefined;
-  const textWidth = innerWidth(width) - (thumbnail ? THUMBNAIL_COLUMNS + 2 : 0);
+  const thumbnailWidth = thumbnail ? visibleLength(thumbnail[0]!) : 0;
+  const textWidth = innerWidth(width) - (thumbnail ? thumbnailWidth + 2 : 0);
 
   const rows: string[] = [];
   if (track && item) {
@@ -155,12 +160,15 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
   // it comes back on its own once that's replaced or cleared (see
   // startPlayback()).
   rows.push(buildStatusRow({ track, hasDevice, isPaused, positionMs, status }, textWidth));
+  // A thumbnail taller than the four rows next to it continues into the
+  // card's bottom spacing row instead of making the card taller.
+  const overflow = thumbnail ? thumbnail.slice(rows.length) : [];
   const card = [
     boxBlank(width),
     ...rows.map((row, i) =>
-      boxLine(thumbnail ? `${thumbnail[i] ?? ' '.repeat(THUMBNAIL_COLUMNS)}  ${row}` : row, width)
+      boxLine(thumbnail ? `${thumbnail[i] ?? ' '.repeat(thumbnailWidth)}  ${row}` : row, width)
     ),
-    boxBlank(width),
+    ...(overflow.length > 0 ? overflow.map((line) => boxLine(line, width)) : [boxBlank(width)]),
   ];
 
   const footerHintLines = buildKeyHintLines(hasDevice, innerWidth(width), hintMode).map((line) => boxLine(line, width));
@@ -192,11 +200,13 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
     const historyLines: string[] = [];
     for (let globalIndex = start; globalIndex < end; globalIndex++) {
       if (globalIndex >= history.length) {
-        historyLines.push(boxLine(fitWidth(`→ ${track!.name}`, width), width, 1, 'current'));
+        const arrow = state.spinner?.row === 'current' ? state.spinner.glyph : '→';
+        historyLines.push(boxLine(fitWidth(`${arrow} ${track!.name}`, width), width, 1, 'current'));
         continue;
       }
       const entry = history[globalIndex]!;
-      const symbol = entry.decision === 'removed' ? '✗' : '✓';
+      const symbol =
+        state.spinner?.row === globalIndex ? state.spinner.glyph : entry.decision === 'removed' ? '✗' : '✓';
       const isBeingEdited = globalIndex === editingIndex;
       const label = `${symbol} ${entry.track.name}${isBeingEdited ? t('review.frame.beingCorrected') : ''}`;
       const fitted = fitWidth(label, width);

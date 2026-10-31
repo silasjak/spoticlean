@@ -28,6 +28,8 @@ export type InfoFrameState = {
     isPaused: boolean;
     positionMs: number;
     status?: StatusLine;
+    /** Spinner glyph while an action is waiting on Spotify — replaces the play/pause icon. */
+    spinner?: string;
   };
   /** Set for already-decided tracks (opened from the history list); undefined = not decided yet. */
   decision?: Decision;

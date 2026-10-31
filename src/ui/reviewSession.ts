@@ -30,6 +30,9 @@ import { enterAltScreen, exitAltScreen, paintFrame, terminalHeight, terminalWidt
 
 const SEEK_STEP_MS = 10_000;
 
+/** A history row by its position in the list, or the pending track's own row. */
+type BusyRow = number | 'current';
+
 /** One already-decided track, in review order. Superset of reviewFrame's HistoryEntry (adds `index`, needed to jump/undo). */
 type SessionHistoryEntry = { index: number; track: SpotifyTrack; decision: Decision };
 
@@ -164,6 +167,50 @@ export async function runReviewSession(
   let isEditing = false;
   let editingIndex: number | undefined;
 
+  // An action waiting on Spotify (starting the next track, pause, seek,
+  // removing, …): the symbol of the history row it concerns turns into a
+  // spinner — the pending track's "→", or the "✗"/"✓" of the entry being
+  // removed/restored — so a slow response doesn't read as a missed key
+  // press, while the track card itself stays as it is. Only appears after
+  // BUSY_DELAY_MS: most calls finish faster, and a spinner flashing up for a
+  // frame is more distracting than none.
+  const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  const BUSY_DELAY_MS = 120;
+  let busy: { row: BusyRow; frame: number; visible: boolean } | undefined;
+
+  async function withBusy<T>(row: BusyRow, action: () => Promise<T>): Promise<T> {
+    const entry = { row, frame: 0, visible: false };
+    busy = entry;
+    let spinner: NodeJS.Timeout | undefined;
+    const delay = setTimeout(() => {
+      entry.visible = true;
+      render();
+      spinner = setInterval(() => {
+        entry.frame = (entry.frame + 1) % SPINNER_FRAMES.length;
+        render();
+      }, 80);
+    }, BUSY_DELAY_MS);
+    try {
+      return await action();
+    } finally {
+      clearTimeout(delay);
+      clearInterval(spinner);
+      if (busy === entry) {
+        busy = undefined;
+        if (entry.visible) render();
+      }
+    }
+  }
+
+  /** The row playback actions concern: the pending track's, or while correcting, the entry being corrected. */
+  function playbackRow(): BusyRow {
+    return isEditing && editingIndex !== undefined ? editingIndex : 'current';
+  }
+
+  function currentSpinner(): { row: BusyRow; glyph: string } | undefined {
+    return busy?.visible ? { row: busy.row, glyph: SPINNER_FRAMES[busy.frame]! } : undefined;
+  }
+
   function setStatus(text: string, color?: (t: string) => string): void {
     status = { text, color };
     render();
@@ -191,7 +238,7 @@ export async function runReviewSession(
   // ask and repaint when they arrive; until then a dim placeholder keeps the
   // card from jumping.
   const thumbnails = new Map<string, string[]>();
-  const THUMBNAIL_PLACEHOLDER = Array.from({ length: 4 }, () => pc.dim('░'.repeat(THUMBNAIL_COLUMNS)));
+  const THUMBNAIL_PLACEHOLDER = Array.from({ length: THUMBNAIL_COLUMNS / 2 }, () => pc.dim('░'.repeat(THUMBNAIL_COLUMNS)));
 
   function thumbnailFor(track: SpotifyTrack | undefined): string[] | undefined {
     // An 8×4 ASCII ramp is just noise, and a narrow terminal needs the room for the title.
@@ -226,7 +273,14 @@ export async function runReviewSession(
           trackNumber: info.index + 1,
           totalTracks: tracks.length,
           reviewTrackNumber: Math.min(view.index + 1, tracks.length),
-          nowPlaying: { track: playingTrack, hasDevice, isPaused: view.isPaused, positionMs: view.positionMs, status },
+          nowPlaying: {
+            track: playingTrack,
+            hasDevice,
+            isPaused: view.isPaused,
+            positionMs: view.positionMs,
+            status,
+            spinner: currentSpinner()?.glyph,
+          },
           decision: decisions.get(info.index),
           cover: infoCover(info.image, coverColumnsFor(width, height)),
           width,
@@ -249,6 +303,7 @@ export async function runReviewSession(
         editing: isEditing,
         editingIndex,
         status,
+        spinner: currentSpinner(),
         thumbnail: thumbnailFor(tracks[view.index]?.track),
         width: terminalWidth(),
         height: terminalHeight(),
@@ -338,7 +393,10 @@ export async function runReviewSession(
 
   // (Re)starts `track` at view.positionMs. Returns whether Spotify accepted the command.
   async function restartAt(track: SpotifyTrack): Promise<boolean> {
-    const ok = await safePlayback(() => playTrackAt(track.uri, view.positionMs, deviceId), onPlaybackError);
+    const ok = await safePlayback(
+      () => withBusy(playbackRow(), () => playTrackAt(track.uri, view.positionMs, deviceId)),
+      onPlaybackError
+    );
     if (ok) view.isPaused = false;
     return ok;
   }
@@ -346,12 +404,15 @@ export async function runReviewSession(
   async function togglePause(track: SpotifyTrack): Promise<void> {
     if (view.isPaused) {
       // Resuming fails once the device has dropped the track — then start it again at the same spot instead.
-      const resumed = await safePlayback(() => resumePlayback(deviceId), () => undefined);
+      const resumed = await safePlayback(
+        () => withBusy(playbackRow(), () => resumePlayback(deviceId)),
+        () => undefined
+      );
       if (resumed) view.isPaused = false;
       else await restartAt(track);
     } else {
       try {
-        await pausePlayback(deviceId);
+        await withBusy(playbackRow(), () => pausePlayback(deviceId));
         view.isPaused = true;
       } catch (error) {
         // "Restriction violated" on pause almost always means nothing is
@@ -385,21 +446,30 @@ export async function runReviewSession(
       case 'right':
         if (hasDevice) {
           view.positionMs += SEEK_STEP_MS;
-          await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
+          await safePlayback(
+            () => withBusy(playbackRow(), () => seek(view.positionMs, deviceId)),
+            onPlaybackError
+          );
           render();
         }
         return true;
       case 'left':
         if (hasDevice) {
           view.positionMs = Math.max(0, view.positionMs - SEEK_STEP_MS);
-          await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
+          await safePlayback(
+            () => withBusy(playbackRow(), () => seek(view.positionMs, deviceId)),
+            onPlaybackError
+          );
           render();
         }
         return true;
       case 'b':
         if (hasDevice) {
           view.positionMs = estimateChorusPositionMs(track.duration_ms);
-          await safePlayback(() => seek(view.positionMs, deviceId), onPlaybackError);
+          await safePlayback(
+            () => withBusy(playbackRow(), () => seek(view.positionMs, deviceId)),
+            onPlaybackError
+          );
           render();
         }
         return true;
@@ -509,17 +579,15 @@ export async function runReviewSession(
 
     if (action !== 'quit' && action !== 'cancel' && action !== previousDecision) {
       if (action === 'removed') {
-        setStatus(t('review.removing', { name: track.name }), pc.dim);
         try {
-          await removeTrack(source, track);
+          await withBusy(historyPosition, () => removeTrack(source, track));
           setStatus(`✗ ${t('review.removed', { name: track.name })}`, pc.red);
         } catch (error) {
           setStatus(t('review.removeFailed', { name: track.name, message: (error as Error).message }), pc.red);
         }
       } else {
-        setStatus(t('review.restoring', { name: track.name }), pc.dim);
         try {
-          await restoreTrack(source, track);
+          await withBusy(historyPosition, () => restoreTrack(source, track));
           setStatus(`↺ ${t('review.restored', { name: track.name })}`, pc.dim);
         } catch (error) {
           setStatus(t('review.restoreFailed', { message: (error as Error).message }), pc.red);
@@ -652,9 +720,8 @@ export async function runReviewSession(
     history.push({ index: view.index, decision: action, track });
 
     if (action === 'removed') {
-      setStatus(t('review.removing', { name: track.name }), pc.dim);
       try {
-        await removeTrack(source, track);
+        await withBusy(history.length - 1, () => removeTrack(source, track));
         setStatus(`✗ ${t('review.removed', { name: track.name })}`, pc.red);
       } catch (error) {
         setStatus(t('review.removeFailed', { name: track.name, message: (error as Error).message }), pc.red);

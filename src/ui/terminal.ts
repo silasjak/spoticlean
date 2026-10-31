@@ -62,8 +62,8 @@ function padLine(line: string, width: number): string {
 }
 
 /**
- * Repaints the whole screen with `lines`, clearing first so a shorter frame
- * never leaves remnants of a longer previous one. Lines beyond the terminal
+ * Repaints the whole screen with `lines`, clearing below them so a shorter
+ * frame never leaves remnants of a longer previous one. Lines beyond the terminal
  * height are dropped (callers size their layout to fit).
  */
 export function paintFrame(lines: string[]): void {
@@ -74,6 +74,9 @@ export function paintFrame(lines: string[]): void {
     .map((line) => padLine(line, width))
     .join('\r\n');
   // Raw mode can disable output post-processing (no \n -> \r\n translation),
-  // so every line break above is an explicit \r\n.
-  process.stdout.write('\x1b[2J\x1b[H' + body);
+  // so every line break above is an explicit \r\n. Overwrites in place
+  // (every line is padded to the full width) and only clears what's below
+  // the last line, instead of wiping the whole screen first — that visibly
+  // flickers once something repaints several times a second (the spinner).
+  process.stdout.write('\x1b[H' + body + '\x1b[J');
 }
