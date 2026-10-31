@@ -238,6 +238,25 @@ function ansiToHtml(line: string): string {
   let style = reset();
   let html = '';
   let last = 0;
+  // Consecutive cover cells of a row, drawn as one element (see flushHalves)
+  let halves: { top: string; bottom: string }[] = [];
+
+  // Cover half blocks: a terminal scales "▀" to the full cell; a browser font
+  // doesn't, so each cell is split into a top (foreground) and bottom
+  // (background) color. One element per run with hard-stop gradients rather
+  // than one per cell — separate boxes at fractional cell widths leave hairline
+  // seams between them.
+  const flushHalves = () => {
+    if (halves.length === 0) return;
+    const stops = (key: 'top' | 'bottom') =>
+      halves.map((cell, i) => `${cell[key]} ${i}ch ${i + 1}ch`).join(',');
+    html +=
+      `<span class="half" style="width:${halves.length}ch;background:` +
+      `linear-gradient(to right,${stops('top')}) top/100% 50% no-repeat,` +
+      // The bottom color fills the whole cell under the top half, so no gap can open between them
+      `linear-gradient(to right,${stops('bottom')}) 0 0/100% 100% no-repeat"></span>`;
+    halves = [];
+  };
 
   const flush = (text: string) => {
     if (!text) return;
@@ -248,13 +267,12 @@ function ansiToHtml(line: string): string {
     if (bg) css.push(`background:${bg}`);
     if (style.bold) css.push('font-weight:700');
     if (style.dim) css.push('opacity:.55');
-    // Cover half blocks: a terminal scales "▀" to the full cell; a browser
-    // font doesn't, so draw each as a cell split into top and bottom color.
     for (const part of text.split(/(▀+)/)) {
       if (!part) continue;
       if (part.startsWith('▀')) {
-        html += `<span class="half" style="width:${part.length}ch;background:linear-gradient(${fg} 50%,${bg ?? BG} 50%)"></span>`;
+        for (let i = 0; i < part.length; i++) halves.push({ top: fg, bottom: bg ?? BG });
       } else {
+        flushHalves();
         // The braille spinner isn't in the monospace font; its fallback glyph is
         // wider than a cell and would push the rest of the row to the right.
         const cells = escapeHtml(part).replace(/[\u2800-\u28ff]/g, (glyph) => `<span class="cell">${glyph}</span>`);
@@ -289,6 +307,7 @@ function ansiToHtml(line: string): string {
     }
   }
   flush(line.slice(last));
+  flushHalves();
   return html || ' ';
 }
 
@@ -299,12 +318,13 @@ const CSS = `
   .bar { height: 36px; display: flex; align-items: center; padding: 0 14px; gap: 8px; background: #1c1f26; border-bottom: 1px solid #262a33; position: relative; }
   .dot { width: 12px; height: 12px; border-radius: 50%; }
   .title { position: absolute; left: 0; right: 0; text-align: center; color: #9aa0ab; font: 13px system-ui, sans-serif; }
-  pre { font: 15px/1.45 'DejaVu Sans Mono', monospace; color: ${FG}; background: ${BG}; padding: 18px 20px 22px; white-space: pre; min-width: calc(${COLS}ch + 40px); }
+  pre { font: 15px/1.2 'DejaVu Sans Mono', monospace; color: ${FG}; background: ${BG}; padding: 18px 20px 22px; white-space: pre; min-width: calc(${COLS}ch + 40px); }
   .cap { height: 64px; display: flex; align-items: center; justify-content: center; gap: 14px; color: #9aa0ab; font: 600 18px system-ui, sans-serif; border-top: 1px solid #1f232b; }
   .key { font: 700 17px 'DejaVu Sans Mono', monospace; color: #0d0f14; background: #1db954; border-radius: 7px; padding: 6px 12px; }
   .hint { opacity: .5; font-weight: 500; }
-  .half { display: inline-block; height: 1.45em; vertical-align: top; }
-  .row { height: 1.45em; width: ${COLS}ch; overflow: hidden; }
+  .half { display: inline-block; height: 1.2em; vertical-align: top; }
+  /* 1.2 line height: 9×18 px cells, the 1:2 of a typical terminal, which the half-block covers assume */
+  .row { height: 1.2em; width: ${COLS}ch; overflow: hidden; }
   .cell { display: inline-block; width: 1ch; overflow: hidden; vertical-align: top; }
 `;
 
