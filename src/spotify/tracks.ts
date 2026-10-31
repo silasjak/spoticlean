@@ -14,9 +14,9 @@ const PAGE_SIZE = 50;
 // saving/removing) still nests it under "track". Two field-filters, two
 // raw shapes, normalized below so the rest of the app only ever sees "track".
 const PLAYLIST_FIELDS =
-  'items(added_at,item(id,uri,name,duration_ms,is_local,preview_url,artists(name),album(name,images))),total,next';
+  'items(added_at,item(id,uri,name,duration_ms,is_local,preview_url,explicit,track_number,artists(name),album(name,images,album_type,release_date,total_tracks))),total,next';
 const LIKED_FIELDS =
-  'items(added_at,track(id,uri,name,duration_ms,is_local,preview_url,artists(name),album(name,images))),total,next';
+  'items(added_at,track(id,uri,name,duration_ms,is_local,preview_url,explicit,track_number,artists(name),album(name,images,album_type,release_date,total_tracks))),total,next';
 
 type RawEntry = { added_at: string; track?: SpotifyTrack; item?: SpotifyTrack };
 

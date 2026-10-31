@@ -17,7 +17,14 @@ export type SpotifyTrack = {
   album: {
     name: string;
     images: SpotifyImage[];
+    // Only requested for the info view (`i`); optional so test fixtures and
+    // older shapes don't need them.
+    album_type?: string;
+    release_date?: string;
+    total_tracks?: number;
   };
+  track_number?: number;
+  explicit?: boolean;
   /** 30s preview clip, no longer reliably populated by the API — used as a fallback only. */
   preview_url: string | null;
   is_local: boolean;

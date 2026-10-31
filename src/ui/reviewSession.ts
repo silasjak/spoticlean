@@ -17,6 +17,8 @@ import {
 import { fetchAllTracks, removeTrack, restoreTrack, type TrackSource } from '../spotify/tracks.js';
 import type { SpotifyTrack, TrackItem } from '../spotify/types.js';
 import { isInteractiveTerminal, readKey, withRawMode } from './keypress.js';
+import { detectColorMode, loadCover, pickCoverImage, renderCover, type RgbaImage } from './coverArt.js';
+import { buildInfoFrame, coverColumnsFor, type CoverState } from './infoFrame.js';
 import { buildReviewFrame, type Decision, type StatusLine } from './reviewFrame.js';
 import { enterAltScreen, exitAltScreen, paintFrame, terminalHeight, terminalWidth } from './terminal.js';
 
@@ -161,7 +163,41 @@ export async function runReviewSession(
     render();
   }
 
+  // Song info view (`i`): which track it shows (by index into `tracks`), and
+  // its cover as decoded pixels — rendered to terminal cells per paint, so a
+  // resize redraws it at the new size without downloading again.
+  let info: { index: number; image: RgbaImage | null | 'loading' } | null = null;
+  const colorMode = detectColorMode();
+  let coverMemo: { image: RgbaImage; columns: number; lines: string[] } | undefined;
+
+  function infoCover(image: RgbaImage | null | 'loading', columns: number): CoverState {
+    if (columns === 0 || image === null) return 'none';
+    if (image === 'loading') return 'loading';
+    // render() runs every second while playing; the cover only changes with its size
+    if (coverMemo?.image !== image || coverMemo.columns !== columns) {
+      coverMemo = { image, columns, lines: renderCover(image, columns, colorMode) };
+    }
+    return coverMemo.lines;
+  }
+
   function render(): void {
+    if (info) {
+      const width = terminalWidth();
+      const height = terminalHeight();
+      paintFrame(
+        buildInfoFrame({
+          sourceName: source.name,
+          item: tracks[info.index]!,
+          trackNumber: info.index + 1,
+          totalTracks: tracks.length,
+          decision: decisions.get(info.index),
+          cover: infoCover(info.image, coverColumnsFor(width, height)),
+          width,
+          height,
+        })
+      );
+      return;
+    }
     paintFrame(
       buildReviewFrame({
         sourceName: source.name,
@@ -332,6 +368,36 @@ export async function runReviewSession(
     }
   }
 
+  // Shows the info view for tracks[index] until i/Esc closes it; playback
+  // keeps going underneath. Returns true if the user asked to quit (Ctrl+C)
+  // meanwhile.
+  async function showInfo(index: number): Promise<boolean> {
+    const track = tracks[index]!.track;
+    const image = pickCoverImage(track.album.images);
+    const opened = { index, image: (image ? 'loading' : null) as RgbaImage | null | 'loading' };
+    info = opened;
+    render();
+    if (image) {
+      void loadCover(image.url).then((loaded) => {
+        opened.image = loaded;
+        if (info === opened) render();
+      });
+    }
+
+    try {
+      for (;;) {
+        const key = await readKey();
+        if (key.ctrl && key.name === 'c') return true;
+        const normalized = normalizeKey(key);
+        if (normalized === 'i' || normalized === 'escape' || normalized === 'q') return false;
+        if (normalized === 'o') openInSpotify(track);
+      }
+    } finally {
+      info = null;
+      render();
+    }
+  }
+
   function normalizeKey(key: Awaited<ReturnType<typeof readKey>>): string | undefined {
     return key.name === 'return'
       ? 'enter'
@@ -389,6 +455,9 @@ export async function runReviewSession(
           break;
         case 'escape':
           action = 'cancel';
+          break;
+        case 'i':
+          if (await showInfo(targetIndex)) action = 'quit';
           break;
         default:
           await handlePlaybackOrOpenKey(normalized, track);
@@ -463,6 +532,12 @@ export async function runReviewSession(
             historyCursor = null;
             render();
             break;
+          case 'i':
+            if (await showInfo(history[historyCursor]!.index)) {
+              quitEarly = true;
+              return true;
+            }
+            break;
           case 'enter': {
             const position = historyCursor;
             historyCursor = null;
@@ -512,6 +587,12 @@ export async function runReviewSession(
           if (history.length > 0) {
             historyCursor = history.length - 1;
             render();
+          }
+          break;
+        case 'i':
+          if (await showInfo(view.index)) {
+            quitEarly = true;
+            return true;
           }
           break;
         default:

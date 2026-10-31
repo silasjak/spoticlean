@@ -16,6 +16,7 @@ function reviewHints(): (KeyHint & { requiresDevice?: boolean })[] {
     { key: '␣', desc: t('review.hints.pause'), requiresDevice: true },
     { key: '←/→', desc: t('review.hints.seek'), requiresDevice: true },
     { key: 'b', desc: t('review.hints.chorus'), requiresDevice: true },
+    { key: 'i', desc: t('review.hints.info') },
     { key: 'o', desc: t('review.hints.open') },
     { key: 'q', desc: t('review.hints.quit') },
   ];
@@ -26,6 +27,7 @@ function browseHints(): (KeyHint & { requiresDevice?: boolean })[] {
   return [
     { key: '↑/↓', desc: t('review.hints.select') },
     { key: '⏎', desc: t('review.hints.openAndCorrect') },
+    { key: 'i', desc: t('review.hints.info') },
     { key: 'Esc', desc: t('review.hints.cancel') },
   ];
 }
@@ -43,6 +45,7 @@ function editHints(): (KeyHint & { requiresDevice?: boolean })[] {
     { key: '␣', desc: t('review.hints.pause'), requiresDevice: true },
     { key: '←/→', desc: t('review.hints.seek'), requiresDevice: true },
     { key: 'b', desc: t('review.hints.chorus'), requiresDevice: true },
+    { key: 'i', desc: t('review.hints.info') },
     { key: 'o', desc: t('review.hints.open') },
     { key: 'Esc', desc: t('review.hints.cancel') },
   ];

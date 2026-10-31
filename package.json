@@ -46,6 +46,7 @@
     "figlet": "^1.11.4",
     "gradient-string": "^3.0.0",
     "i18next": "^26.4.2",
+    "jpeg-js": "^0.4.4",
     "open": "^10.1.0",
     "picocolors": "^1.1.1"
   },
