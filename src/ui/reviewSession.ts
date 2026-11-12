@@ -26,7 +26,7 @@ import {
   type Decision,
   type StatusLine,
 } from './reviewFrame.js';
-import { enterAltScreen, exitAltScreen, paintFrame, terminalHeight, terminalWidth } from './terminal.js';
+import { enterAltScreen, exitAltScreen, isAltScreenActive, paintFrame, terminalHeight, terminalWidth } from './terminal.js';
 
 const SEEK_STEP_MS = 10_000;
 
@@ -117,9 +117,15 @@ export type ReviewSummary = {
   quitEarly: boolean;
 };
 
+/**
+ * `alert` resolves to a line for the bottom border (or undefined for none);
+ * a promise so whatever produces it — the update check — can finish while
+ * the session already runs.
+ */
 export async function runReviewSession(
   source: TrackSource,
-  deviceId: string | undefined
+  deviceId: string | undefined,
+  alert: Promise<string | undefined> = Promise.resolve(undefined)
 ): Promise<ReviewSummary> {
   if (!isInteractiveTerminal()) {
     throw new Error(t('common.needsTty'));
@@ -149,6 +155,13 @@ export async function runReviewSession(
   const decisions = new Map<number, Decision>();
   const history: SessionHistoryEntry[] = [];
   let status: StatusLine | undefined;
+  let alertText: string | undefined;
+  void alert.then((text) => {
+    alertText = text;
+    // Not before the review screen is up, nor after it's gone — painting
+    // then would land in the normal scrollback.
+    if (text && isAltScreenActive()) render();
+  });
   let hasDevice = Boolean(deviceId);
   let quitEarly = false;
 
@@ -283,6 +296,7 @@ export async function runReviewSession(
           },
           decision: decisions.get(info.index),
           cover: infoCover(info.image, coverColumnsFor(width, height)),
+          alert: alertText,
           width,
           height,
         })
@@ -305,6 +319,7 @@ export async function runReviewSession(
         status,
         spinner: currentSpinner(),
         thumbnail: thumbnailFor(tracks[view.index]?.track),
+        alert: alertText,
         width: terminalWidth(),
         height: terminalHeight(),
       })

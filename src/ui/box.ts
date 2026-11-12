@@ -8,12 +8,14 @@ function horizontal(width: number): string {
   return '─'.repeat(Math.max(0, width));
 }
 
-function withTitle(left: string, right: string, title: string, width: number): string {
+function withTitle(left: string, right: string, title: string, width: number, dimTitle = true): string {
   const label = title ? ` ${title} ` : '';
   // `left` is 2 chars ('┌─'/'├─'), `right` is 1 ('┐'/'┤') — subtract their
   // real lengths rather than assuming 1+1, or the line ends up 1 too wide.
   const dashes = Math.max(0, width - left.length - right.length - visibleLength(label));
-  return pc.dim(left + label + horizontal(dashes) + right);
+  return dimTitle
+    ? pc.dim(left + label + horizontal(dashes) + right)
+    : pc.dim(left) + label + pc.dim(horizontal(dashes) + right);
 }
 
 export function boxTop(width: number, title = ''): string {
@@ -24,8 +26,14 @@ export function boxDivider(width: number, title = ''): string {
   return withTitle('├─', '┤', title, width);
 }
 
-export function boxBottom(width: number): string {
-  return pc.dim('└' + horizontal(width - 2) + '┘');
+/**
+ * `alert` sits in the bottom border, undimmed — a spot for something worth
+ * noticing (like an available update) that costs no row of its own. Like a
+ * title, truncate the plain text with `fitWidth(text, width, 3)` before
+ * coloring it.
+ */
+export function boxBottom(width: number, alert = ''): string {
+  return withTitle('└─', '┘', alert, width, false);
 }
 
 /** Background styles a content line can be rendered in, see `boxLine`. */

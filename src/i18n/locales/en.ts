@@ -36,6 +36,12 @@ const en: Translations = {
       configPath: 'Config lives at {{path}}',
       debugLogPath: 'Debug log lives at {{path}}',
     },
+    update: {
+      title: 'Update available',
+      command: 'Run {{command}} to update',
+      releaseNotes: "What's new: {{url}}",
+      alert: 'Update available {{current}} → {{latest}} · {{command}}',
+    },
   },
   auth: {
     setup: {
