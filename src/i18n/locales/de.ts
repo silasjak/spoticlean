@@ -37,6 +37,11 @@ const de = {
       configPath: 'Konfiguration liegt unter {{path}}',
       debugLogPath: 'Debug-Log liegt unter {{path}}',
     },
+    update: {
+      title: 'Update verfügbar',
+      command: 'Zum Aktualisieren: {{command}}',
+      releaseNotes: 'Was ist neu: {{url}}',
+    },
   },
   auth: {
     setup: {

@@ -31,6 +31,8 @@ export type StoredConfig = {
   resume?: Record<string, ResumeState>;
   /** Explicit override; unset means "detect from the OS locale". Set via `spoticlean setup`. */
   language?: SupportedLanguage;
+  /** Last npm registry lookup, so the update check asks at most once a day. */
+  updateCheck?: { checkedAt: number; latestVersion?: string };
 };
 
 const paths = envPaths('spoticlean', { suffix: '' });

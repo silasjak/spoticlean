@@ -11,6 +11,7 @@ import { prepareDevice } from './ui/device.js';
 import { runReviewSession } from './ui/reviewSession.js';
 import { selectSource } from './ui/selectSource.js';
 import { runSettingsMenu } from './ui/settings.js';
+import { checkForUpdate, printUpdateNotice } from './updateCheck.js';
 
 function printSummary(summary: Awaited<ReturnType<typeof runReviewSession>>): void {
   const lines = [
@@ -66,38 +67,22 @@ function printHelp(): void {
   );
 }
 
-export async function main(argv: string[]): Promise<void> {
-  const config = await loadConfig();
-  await initI18n(config.language ?? detectLanguage());
-
-  const command = argv[0];
-
-  if (command === 'logout') {
-    await runLogout();
-    return;
-  }
-
-  if (command === 'setup') {
-    printBanner();
-    p.intro(pc.bgGreen(pc.black(' spoticlean setup ')));
-    try {
-      await runSetup();
-      p.outro(pc.green(t('cli.setupReady')));
-    } catch (error) {
-      if (p.isCancel(error) || error instanceof AuthCancelled) {
-        p.cancel(t('common.cancelled'));
-        return;
-      }
-      throw error;
+async function runSetupCommand(): Promise<void> {
+  printBanner();
+  p.intro(pc.bgGreen(pc.black(' spoticlean setup ')));
+  try {
+    await runSetup();
+    p.outro(pc.green(t('cli.setupReady')));
+  } catch (error) {
+    if (p.isCancel(error) || error instanceof AuthCancelled) {
+      p.cancel(t('common.cancelled'));
+      return;
     }
-    return;
+    throw error;
   }
+}
 
-  if (command === 'help' || command === '--help' || command === '-h') {
-    printHelp();
-    return;
-  }
-
+async function runCleanup(): Promise<void> {
   printBanner();
   p.intro(pc.bgGreen(pc.black(' spoticlean ')));
 
@@ -138,4 +123,28 @@ export async function main(argv: string[]): Promise<void> {
     }
     throw error;
   }
+}
+
+export async function main(argv: string[]): Promise<void> {
+  const config = await loadConfig();
+  await initI18n(config.language ?? detectLanguage());
+
+  const command = argv[0];
+
+  if (command === 'logout') {
+    await runLogout();
+    return;
+  }
+
+  if (command === 'help' || command === '--help' || command === '-h') {
+    printHelp();
+    return;
+  }
+
+  // Started right away but only awaited on the way out — the registry
+  // lookup runs alongside the session instead of delaying startup, and the
+  // notice lands below the outro, where npm & co. put theirs too.
+  const update = checkForUpdate();
+  await (command === 'setup' ? runSetupCommand() : runCleanup());
+  printUpdateNotice(await update);
 }
