@@ -11,7 +11,7 @@ import { prepareDevice } from './ui/device.js';
 import { runReviewSession } from './ui/reviewSession.js';
 import { selectSource } from './ui/selectSource.js';
 import { runSettingsMenu } from './ui/settings.js';
-import { checkForUpdate, printUpdateNotice } from './updateCheck.js';
+import { checkForUpdate, printUpdateNotice, updateAlert } from './updateCheck.js';
 
 function printSummary(summary: Awaited<ReturnType<typeof runReviewSession>>): void {
   const lines = [
@@ -82,7 +82,7 @@ async function runSetupCommand(): Promise<void> {
   }
 }
 
-async function runCleanup(): Promise<void> {
+async function runCleanup(update: Promise<string | undefined>): Promise<void> {
   printBanner();
   p.intro(pc.bgGreen(pc.black(' spoticlean ')));
 
@@ -113,7 +113,7 @@ async function runCleanup(): Promise<void> {
 
     const { source } = await selectSource();
     const deviceId = await prepareDevice();
-    const summary = await runReviewSession(source, deviceId);
+    const summary = await runReviewSession(source, deviceId, update.then(updateAlert));
     printSummary(summary);
     p.outro(pc.green(t('cli.outroDone')));
   } catch (error) {
@@ -141,10 +141,11 @@ export async function main(argv: string[]): Promise<void> {
     return;
   }
 
-  // Started right away but only awaited on the way out — the registry
-  // lookup runs alongside the session instead of delaying startup, and the
-  // notice lands below the outro, where npm & co. put theirs too.
+  // Started right away but only awaited when needed — the registry lookup
+  // runs alongside the session instead of delaying startup. The review
+  // screen shows it in its bottom border; the box below the outro is where
+  // npm & co. put theirs too.
   const update = checkForUpdate();
-  await (command === 'setup' ? runSetupCommand() : runCleanup());
+  await (command === 'setup' ? runSetupCommand() : runCleanup(update));
   printUpdateNotice(await update);
 }

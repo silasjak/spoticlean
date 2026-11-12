@@ -316,3 +316,16 @@ test('a spinner replaces the symbol of the row an action is waiting on — the t
   assert.ok(removing.some((line) => line.includes('✗ Song 0')));
   assert.ok(removing.some((line) => line.includes('→ Ein Song')));
 });
+
+test('an alert sits in the bottom border without changing width or height', () => {
+  const plain = buildReviewFrame(baseState());
+  const withAlert = buildReviewFrame(baseState({ alert: 'Update verfügbar 1.1.0 → 1.2.0' }));
+  assert.equal(withAlert.length, plain.length);
+  assert.match(stripAnsi(withAlert.at(-1)!), /^└─ Update verfügbar 1\.1\.0 → 1\.2\.0 ─+┘$/);
+  for (const line of withAlert) assert.equal(visibleLength(line), 80);
+});
+
+test('a long alert is cut to fit the bottom border', () => {
+  const frame = buildReviewFrame(baseState({ alert: 'x'.repeat(200), width: 40 }));
+  assert.equal(visibleLength(frame.at(-1)!), 40);
+});

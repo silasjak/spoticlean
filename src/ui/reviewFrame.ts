@@ -34,6 +34,8 @@ export type ReviewFrameState = {
   spinner?: { row: number | 'current'; glyph: string };
   /** Small cover (THUMBNAIL_COLUMNS wide, half as many rows) next to the track details; omitted = no thumbnail column at all. */
   thumbnail?: string[];
+  /** Shown in the bottom border for as long as it's set, see `boxBottom`. */
+  alert?: string;
   width: number;
   height: number;
 };
@@ -44,6 +46,10 @@ export const THUMBNAIL_COLUMNS = 8;
 export const THUMBNAIL_MIN_WIDTH = 60;
 
 const identity = (text: string) => text;
+
+export function alertLabel(alert: string | undefined, width: number): string {
+  return alert ? pc.yellow(fitWidth(alert, width, 3)) : '';
+}
 
 /** A "0:35 ███████░░░░░░░░░░░░ 3:20" bar, sized to fill exactly `width` columns — the filled portion accented in brand green, the rest dim. */
 export function buildProgressBar(positionMs: number, durationMs: number, width: number): string {
@@ -172,7 +178,7 @@ export function buildReviewFrame(state: ReviewFrameState): string[] {
   ];
 
   const footerHintLines = buildKeyHintLines(hasDevice, innerWidth(width), hintMode).map((line) => boxLine(line, width));
-  const footer = [boxDivider(width), ...footerHintLines, boxBottom(width)];
+  const footer = [boxDivider(width), ...footerHintLines, boxBottom(width, alertLabel(state.alert, width))];
 
   // Header, card and footer (the sticky key legend) always take priority —
   // the "Verlauf" section (its divider included) only appears at all once

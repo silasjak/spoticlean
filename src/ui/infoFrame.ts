@@ -7,7 +7,7 @@ import { spotifyGreen } from './brand.js';
 import { boxBlank, boxBottom, boxDivider, boxLine, boxTop, fitWidth, innerWidth } from './box.js';
 import { formatAddedAt, formatArtists, formatDuration } from './format.js';
 import { packKeyHints } from './hintLine.js';
-import { buildStatusRow, type Decision, type StatusLine } from './reviewFrame.js';
+import { alertLabel, buildStatusRow, type Decision, type StatusLine } from './reviewFrame.js';
 import { truncate } from './terminal.js';
 
 /** The cover as rendered lines, or why there's none (yet). */
@@ -34,6 +34,8 @@ export type InfoFrameState = {
   /** Set for already-decided tracks (opened from the history list); undefined = not decided yet. */
   decision?: Decision;
   cover: CoverState;
+  /** Shown in the bottom border for as long as it's set, see `boxBottom`. */
+  alert?: string;
   width: number;
   height: number;
 };
@@ -213,6 +215,6 @@ export function buildInfoFrame(state: InfoFrameState): string[] {
     boxLine(statusRow, width),
     boxDivider(width),
     ...hints.map((line) => boxLine(line, width)),
-    boxBottom(width),
+    boxBottom(width, alertLabel(state.alert, width)),
   ];
 }

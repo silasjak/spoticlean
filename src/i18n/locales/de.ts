@@ -41,6 +41,7 @@ const de = {
       title: 'Update verfügbar',
       command: 'Zum Aktualisieren: {{command}}',
       releaseNotes: 'Was ist neu: {{url}}',
+      alert: 'Update verfügbar {{current}} → {{latest}} · {{command}}',
     },
   },
   auth: {

@@ -98,6 +98,11 @@ export function buildUpdateNotice(current: string, latest: string): string[] {
   ];
 }
 
+/** The one-line form for the review screen's alert spot. */
+export function updateAlert(latest: string | undefined): string | undefined {
+  return latest ? t('cli.update.alert', { current: currentVersion(), latest, command: `npm i -g ${PACKAGE_NAME}` }) : undefined;
+}
+
 export function printUpdateNotice(latest: string | undefined): void {
   if (!latest) return;
   console.log(buildUpdateNotice(currentVersion(), latest).join('\n') + '\n');

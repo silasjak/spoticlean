@@ -40,6 +40,7 @@ const en: Translations = {
       title: 'Update available',
       command: 'Run {{command}} to update',
       releaseNotes: "What's new: {{url}}",
+      alert: 'Update available {{current}} → {{latest}} · {{command}}',
     },
   },
   auth: {
